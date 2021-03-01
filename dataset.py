@@ -7,8 +7,6 @@ import pickle
 import gdown
 import nltk
 
-from torch.utils.data import Dataset
-
 
 class Dictionary:
     def __init__(self, idx2word=None):
@@ -36,7 +34,7 @@ class Dictionary:
         self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
 
 
-class GoodreadsReviewsSpoilerDataset(Dataset):
+class GoodreadsReviewsSpoilerDataset:
     '''
     Credits: Mengting Wan, Rishabh Misra, Ndapa Nakashole, Julian McAuley, "Fine-Grained Spoiler Detection from Large-Scale Review Corpora", in ACL'19.
     '''
@@ -52,8 +50,6 @@ class GoodreadsReviewsSpoilerDataset(Dataset):
 
         if download:
             self.download()
-
-        file_path = os.path.join(self.root, self.base_folder, self.filename)
 
     def download(self):
         file_dir = os.path.join(self.root, self.base_folder)
