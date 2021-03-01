@@ -6,7 +6,6 @@ import json
 import pickle
 import gdown
 import nltk
-from nltk import tokenize
 
 from torch.utils.data import Dataset
 
@@ -64,10 +63,10 @@ class GoodreadsReviewsSpoilerDataset(Dataset):
         if not os.path.exists(file_path):
             gdown.download(self.URL, output=file_path)
 
-    def load_json(self, limit=None):
-        return list(self.get_json_iter(limit))
+    def load_records(self, limit=None):
+        return list(self.get_record_gen(limit))
 
-    def get_json_iter(self, limit=None):
+    def get_record_gen(self, limit=None):
         file_path = os.path.join(self.root, self.base_folder, self.filename)
         count = 0
         with gzip.open(file_path) as fin:
@@ -80,18 +79,55 @@ class GoodreadsReviewsSpoilerDataset(Dataset):
                 if (limit is not None) and (count > limit):
                     break
 
-    def get_label_word_token_iter(self, record):
-        review_sents = record['review_sentences']
-        for (label, sent) in review_sents:
-            words = self.word_tokenizer.tokenize(sent)
+    @staticmethod
+    def get_label_sent_words_gen(label_sents, word_tokenizer):
+        for (label, sent) in label_sents:
+            # tokenize
+            words = word_tokenizer.tokenize(sent)
+            # transform & filter
+            # => lower? stop words? punctuation? HTTP? digits? misspelled?
             yield (label, words)
 
-    def get_word_count_by_document(self, json_iter):
-        wc_doc = collections.defaultdict(lambda: collections.Counter())
-        for record in json_iter:
-            doc_id = record['book_id']
-            label_word_token_iter = self.get_label_word_token_iter(record)
-            for label_word_token in label_word_token_iter:
-                wc_doc[doc_id].update(label_word_token[1])
-        wc = functools.reduce((lambda x, y: x + y), wc_doc.values())
-        return wc_doc, wc
+    @staticmethod
+    def get_word_dict(wc, n_most_common):
+        idx2word = ['<pad>']
+        idx2word.extend([word for (word, _) in wc.most_common(n_most_common)])
+        idx2word.append('<unk>')
+        return Dictionary(idx2word)
+
+    @staticmethod
+    def get_label_sent_word_idxs_gen(label_sent_words, word_dict):
+        for (label, words) in label_sent_words:
+            word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'],
+                                               word_dict.word2idx)
+            word_idxs = [word2idx[word] for word in words]
+            yield (label, word_idxs)
+
+    def get_label_sent_words_gen_gr(self, record):
+        '''
+        'gr' for 'given record'
+        '''
+        review_sents = record['review_sentences']
+        return self.get_label_sent_words_gen(review_sents, self.word_tokenizer)
+
+    def get_word_count(self, records):
+        wc_artwork = collections.defaultdict(lambda: collections.Counter())
+        for record in records:
+            artwork_id = record['book_id']
+            label_sent_words_gen = self.get_label_sent_words_gen_gr(record)
+            for (_, words) in label_sent_words_gen:
+                wc_artwork[artwork_id].update(words)
+        wc = functools.reduce((lambda x, y: x + y), wc_artwork.values())
+        return wc, wc_artwork
+
+    def get_processed_record_gen(self, n_most_common, limit=None):
+        record_gen = self.get_record_gen(limit)
+        wc, _ = self.get_word_count(record_gen)
+        word_dict = self.get_word_dict(wc, n_most_common)
+
+        record_gen = self.get_record_gen(limit)
+        for record in record_gen:
+            label_sent_words_gen = self.get_label_sent_words_gen_gr(record)
+            record['review_sentences_tokens'] = list(
+                self.get_label_sent_word_idxs_gen(label_sent_words_gen, word_dict))
+            yield record
