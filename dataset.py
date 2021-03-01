@@ -98,9 +98,9 @@ class GoodreadsReviewsSpoilerDataset:
 
     @staticmethod
     def get_label_sent_encode_gen(label_sent_words, word_dict):
-        for (label, words) in label_sent_words:
-            word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'],
+        word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'],
                                                word_dict.word2idx)
+        for (label, words) in label_sent_words:
             word_idxs = [word2idx[word] for word in words]
             yield (label, word_idxs)
 
