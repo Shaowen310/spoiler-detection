@@ -9,10 +9,11 @@ dlist = ds.load_records(limit=10)
 
 # %%
 wc, wc_doc = ds.get_word_count(dlist)
-wc_doc['22551730']
 
 # %%
 # tf-idf
-processed_records = list(ds.get_processed_record_gen(10,10))
+doc_label_sent_encodes_gen, word_dict = ds.encode(10, 10)
+doc_label_sent_encodes = list(doc_label_sent_encodes_gen)
+docs, doc_sent_labels = ds.pad(doc_label_sent_encodes)
 
 # %%

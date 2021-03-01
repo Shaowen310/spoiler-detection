@@ -1,4 +1,5 @@
 import collections
+import itertools
 import functools
 import os
 import gzip
@@ -6,6 +7,7 @@ import json
 import pickle
 import gdown
 import nltk
+import torch
 
 
 class Dictionary:
@@ -51,6 +53,9 @@ class GoodreadsReviewsSpoilerDataset:
         if download:
             self.download()
 
+        self.max_n_words = 10
+        self.max_n_sents = 10
+
     def download(self):
         file_dir = os.path.join(self.root, self.base_folder)
         file_path = os.path.join(file_dir, self.filename)
@@ -72,7 +77,7 @@ class GoodreadsReviewsSpoilerDataset:
 
                 yield d
 
-                if (limit is not None) and (count > limit):
+                if (limit is not None) and (count >= limit):
                     break
 
     @staticmethod
@@ -92,7 +97,7 @@ class GoodreadsReviewsSpoilerDataset:
         return Dictionary(idx2word)
 
     @staticmethod
-    def get_label_sent_word_idxs_gen(label_sent_words, word_dict):
+    def get_label_sent_encode_gen(label_sent_words, word_dict):
         for (label, words) in label_sent_words:
             word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'],
                                                word_dict.word2idx)
@@ -116,14 +121,38 @@ class GoodreadsReviewsSpoilerDataset:
         wc = functools.reduce((lambda x, y: x + y), wc_artwork.values())
         return wc, wc_artwork
 
-    def get_processed_record_gen(self, n_most_common, limit=None):
+    def get_doc_label_sent_encodes_gen_grs(self, records, word_dict):
+        for record in records:
+            label_sent_words_gen = self.get_label_sent_words_gen_gr(record)
+            doc_label_sent_encodes = list(
+                self.get_label_sent_encode_gen(label_sent_words_gen, word_dict))
+            yield doc_label_sent_encodes
+
+    def encode(self, n_most_common, limit=None):
         record_gen = self.get_record_gen(limit)
         wc, _ = self.get_word_count(record_gen)
         word_dict = self.get_word_dict(wc, n_most_common)
 
         record_gen = self.get_record_gen(limit)
-        for record in record_gen:
-            label_sent_words_gen = self.get_label_sent_words_gen_gr(record)
-            record['review_sentences_tokens'] = list(
-                self.get_label_sent_word_idxs_gen(label_sent_words_gen, word_dict))
-            yield record
+        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen_grs(record_gen, word_dict)
+
+        return doc_label_sent_encodes_gen, word_dict
+
+    def pad(self, doc_label_sent_encodes, pad_idx=0, label_mask=-1):
+        docs, doc_sent_labels = [], []
+        for label_sent_encodes in doc_label_sent_encodes:
+            sents, labels = [], []
+            for label, sent in itertools.islice(label_sent_encodes, self.max_n_sents):
+                if self.max_n_words > len(sent):
+                    sent.extend([pad_idx] * (self.max_n_words - len(sent)))
+                sents.append(sent[:self.max_n_words])
+                labels.append(label)
+            for _ in range(max(0, self.max_n_sents - len(label_sent_encodes))):
+                sents.append([pad_idx] * self.max_n_words)
+                labels.append(label_mask)
+            docs.append(sents)
+            doc_sent_labels.append(labels)
+        docs = torch.tensor(docs, dtype=torch.long)
+        doc_sent_labels = torch.tensor(doc_sent_labels, dtype=torch.float)
+
+        return docs, doc_sent_labels
