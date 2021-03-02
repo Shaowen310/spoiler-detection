@@ -123,7 +123,7 @@ class GoodreadsReviewsSpoilerDataset:
     def encode(self, n_most_common, limit=None):
         record_gen = self.get_record_gen(limit)
         wc, _ = self.get_word_count(record_gen)
-        word_dict = self.get_word_dict(wc, n_most_common)
+        word_dict = __class__.get_word_dict(wc, n_most_common)
 
         record_gen = self.get_record_gen(limit)
         doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(record_gen, word_dict)
