@@ -22,12 +22,6 @@ class Dictionary:
     def __len__(self):
         return len(self.idx2word)
 
-    def add_word(self, word):
-        if word not in self.word2idx:
-            self.idx2word.append(word)
-            self.word2idx[word] = len(self.idx2word) - 1
-        return self.word2idx[word]
-
     def save(self, fp):
         pickle.dump(self.idx2word, open(fp, 'wb'))
 
@@ -81,13 +75,12 @@ class GoodreadsReviewsSpoilerDataset:
                     break
 
     @staticmethod
-    def get_label_sent_words_gen(label_sents, word_tokenizer):
-        for (label, sent) in label_sents:
-            # tokenize
-            words = word_tokenizer.tokenize(sent)
-            # transform & filter
-            # => lower? stop words? punctuation? HTTP? digits? misspelled?
-            yield (label, words)
+    def get_sent_words(sent, word_tokenizer):
+        # tokenize
+        words = word_tokenizer.tokenize(sent)
+        # transform & filter
+        # => lower? stop words? punctuation? HTTP? digits? misspelled?
+        return words
 
     @staticmethod
     def get_word_dict(wc, n_most_common):
@@ -97,36 +90,35 @@ class GoodreadsReviewsSpoilerDataset:
         return Dictionary(idx2word)
 
     @staticmethod
-    def get_label_sent_encode_gen(label_sent_words, word_dict):
-        word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'],
-                                               word_dict.word2idx)
-        for (label, words) in label_sent_words:
-            word_idxs = [word2idx[word] for word in words]
-            yield (label, word_idxs)
+    def get_sent_encode(sent_words, word2idx):
+        return list(map(lambda word: word2idx[word], sent_words))
 
-    def get_label_sent_words_gen_gr(self, record):
-        '''
-        'gr' for 'given record'
-        '''
+    def get_label_sent_words_gen(self, record):
         review_sents = record['review_sentences']
-        return self.get_label_sent_words_gen(review_sents, self.word_tokenizer)
+        return map(
+            lambda label_sent:
+            (label_sent[0], __class__.get_sent_words(label_sent[1], self.word_tokenizer)),
+            review_sents)
 
     def get_word_count(self, records):
         wc_artwork = collections.defaultdict(lambda: collections.Counter())
         for record in records:
             artwork_id = record['book_id']
-            label_sent_words_gen = self.get_label_sent_words_gen_gr(record)
-            for (_, words) in label_sent_words_gen:
+            for (_, words) in self.get_label_sent_words_gen(record):
                 wc_artwork[artwork_id].update(words)
         wc = functools.reduce((lambda x, y: x + y), wc_artwork.values())
         return wc, wc_artwork
 
-    def get_doc_label_sent_encodes_gen_grs(self, records, word_dict):
-        for record in records:
-            label_sent_words_gen = self.get_label_sent_words_gen_gr(record)
-            doc_label_sent_encodes = list(
-                self.get_label_sent_encode_gen(label_sent_words_gen, word_dict))
-            yield doc_label_sent_encodes
+    def get_doc_label_sent_encode(self, record, word2idx):
+        return list(
+            map(
+                lambda label_words:
+                (label_words[0], __class__.get_sent_encode(label_words[1], word2idx)),
+                self.get_label_sent_words_gen(record)))
+
+    def get_doc_label_sent_encodes_gen(self, records, word_dict):
+        word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'], word_dict.word2idx)
+        return map(lambda record: self.get_doc_label_sent_encode(record, word2idx), records)
 
     def encode(self, n_most_common, limit=None):
         record_gen = self.get_record_gen(limit)
@@ -134,7 +126,7 @@ class GoodreadsReviewsSpoilerDataset:
         word_dict = self.get_word_dict(wc, n_most_common)
 
         record_gen = self.get_record_gen(limit)
-        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen_grs(record_gen, word_dict)
+        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(record_gen, word_dict)
 
         return doc_label_sent_encodes_gen, word_dict
 
