@@ -30,7 +30,7 @@ class Dictionary:
         self.word2idx = {word: idx for idx, word in enumerate(self.idx2word)}
 
 
-class GoodreadsReviewsSpoilerDataset:
+class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     '''
     Credits: Mengting Wan, Rishabh Misra, Ndapa Nakashole, Julian McAuley, "Fine-Grained Spoiler Detection from Large-Scale Review Corpora", in ACL'19.
     '''
@@ -148,3 +148,9 @@ class GoodreadsReviewsSpoilerDataset:
         doc_sent_labels = torch.tensor(doc_sent_labels, dtype=torch.float)
 
         return docs, doc_sent_labels
+
+    def __getitem__(self):
+        pass
+
+    def __len__(self):
+        pass
