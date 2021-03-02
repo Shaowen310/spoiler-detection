@@ -7,6 +7,7 @@ import json
 import pickle
 import gdown
 import nltk
+from nltk.tokenize import word_tokenize
 import torch
 
 
@@ -74,10 +75,9 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
                 if (limit is not None) and (count >= limit):
                     break
 
-    @staticmethod
-    def get_sent_words(sent, word_tokenizer):
+    def get_sent_words(self, sent):
         # tokenize
-        words = word_tokenizer.tokenize(sent)
+        words = self.word_tokenizer.tokenize(sent)
         # transform & filter
         # => lower? stop words? punctuation? HTTP? digits? misspelled?
         return words
@@ -89,36 +89,24 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         idx2word.append('<unk>')
         return Dictionary(idx2word)
 
-    @staticmethod
-    def get_sent_encode(sent_words, word2idx):
-        return list(map(lambda word: word2idx[word], sent_words))
-
-    def get_label_sent_words_gen(self, record):
-        review_sents = record['review_sentences']
-        return map(
-            lambda label_sent:
-            (label_sent[0], __class__.get_sent_words(label_sent[1], self.word_tokenizer)),
-            review_sents)
+    def get_label_sent_words(self, record):
+        return [(lb_s[0], self.get_sent_words(lb_s[1])) for lb_s in record['review_sentences']]
 
     def get_word_count(self, records):
         wc_artwork = collections.defaultdict(lambda: collections.Counter())
         for record in records:
             artwork_id = record['book_id']
-            for (_, words) in self.get_label_sent_words_gen(record):
+            for (_, words) in self.get_label_sent_words(record):
                 wc_artwork[artwork_id].update(words)
         wc = functools.reduce((lambda x, y: x + y), wc_artwork.values())
         return wc, wc_artwork
 
-    def get_doc_label_sent_encode_gen(self, record, word2idx):
-        return map(
-            lambda label_words:
-            (label_words[0], __class__.get_sent_encode(label_words[1], word2idx)),
-            self.get_label_sent_words_gen(record))
+    def get_doc_label_sent_encodes(self, record, word2idx):
+        return [(lb_sw[0], [word2idx[w if w in word2idx else '<unk>'] for w in lb_sw[1]])
+                for lb_sw in self.get_label_sent_words(record)]
 
-    def get_doc_label_sent_encodes_gen(self, records, word_dict):
-        word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'], word_dict.word2idx)
-        return map(lambda record: list(self.get_doc_label_sent_encode_gen(record, word2idx)),
-                   records)
+    def get_doc_label_sent_encodes_gen(self, records, word2idx):
+        return map(lambda record: self.get_doc_label_sent_encodes(record, word2idx), records)
 
     def encode(self, n_most_common, limit=None):
         record_gen = self.get_record_gen(limit)
@@ -126,7 +114,8 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         word_dict = __class__.get_word_dict(wc, n_most_common)
 
         record_gen = self.get_record_gen(limit)
-        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(record_gen, word_dict)
+        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(
+            record_gen, word_dict.word2idx)
 
         return doc_label_sent_encodes_gen, word_dict
 
