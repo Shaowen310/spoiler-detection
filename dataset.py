@@ -39,7 +39,7 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     filename = 'goodreads_reviews_spoiler.json.gz'
     word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
 
-    def __init__(self, root='.data', download=True):
+    def __init__(self, root='data_', download=True):
         super().__init__()
 
         self.root = root
