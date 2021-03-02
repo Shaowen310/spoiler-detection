@@ -109,16 +109,16 @@ class GoodreadsReviewsSpoilerDataset:
         wc = functools.reduce((lambda x, y: x + y), wc_artwork.values())
         return wc, wc_artwork
 
-    def get_doc_label_sent_encode(self, record, word2idx):
-        return list(
-            map(
-                lambda label_words:
-                (label_words[0], __class__.get_sent_encode(label_words[1], word2idx)),
-                self.get_label_sent_words_gen(record)))
+    def get_doc_label_sent_encode_gen(self, record, word2idx):
+        return map(
+            lambda label_words:
+            (label_words[0], __class__.get_sent_encode(label_words[1], word2idx)),
+            self.get_label_sent_words_gen(record))
 
     def get_doc_label_sent_encodes_gen(self, records, word_dict):
         word2idx = collections.defaultdict(lambda: word_dict.word2idx['<unk>'], word_dict.word2idx)
-        return map(lambda record: self.get_doc_label_sent_encode(record, word2idx), records)
+        return map(lambda record: list(self.get_doc_label_sent_encode_gen(record, word2idx)),
+                   records)
 
     def encode(self, n_most_common, limit=None):
         record_gen = self.get_record_gen(limit)
