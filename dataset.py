@@ -41,107 +41,57 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     filename = 'goodreads_reviews_spoiler.json.gz'
     word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
 
-    def __init__(self, root='data_', download=True):
+    def __init__(self, datafile, max_n_words, max_n_sents):
         super().__init__()
 
-        self.root = root
+        self.datafile = datafile
 
-        if download:
-            self.download()
+        self.max_n_words = max_n_words
+        self.max_n_sents = max_n_sents
 
-        self.max_n_words = 10
-        self.max_n_sents = 10
+        data = None
+        with open(datafile, 'rb') as f:
+            data = pickle.load(f)
 
-        self.data = None
+        doc_label_sent_encodes = data['doc_label_sent_encodes']
+        self.idx2word = data['idx2word']
+        self.word2idx = {w: i for i, w in enumerate(self.idx2word)}
 
-    def download(self):
-        file_dir = os.path.join(self.root, self.base_folder)
-        file_path = os.path.join(file_dir, self.filename)
-        if not os.path.exists(file_dir):
-            os.makedirs(file_dir)
-        if not os.path.exists(file_path):
-            gdown.download(self.URL, output=file_path)
-
-    def load_records(self, limit=None):
-        return list(self.get_record_gen(limit))
-
-    def get_record_gen(self, limit=None):
-        file_path = os.path.join(self.root, self.base_folder, self.filename)
-        count = 0
-        with gzip.open(file_path) as fin:
-            for l in fin:
-                d = json.loads(l)
-                count += 1
-
-                yield d
-
-                if (limit is not None) and (count >= limit):
-                    break
-
-    def get_sent_words(self, sent):
-        # tokenize
-        words = self.word_tokenizer.tokenize(sent)
-        # transform & filter
-        # => lower? stop words? punctuation? HTTP? digits? misspelled?
-        return words
-
-    @staticmethod
-    def get_word_dict(wc, n_most_common):
-        idx2word = ['<pad>']
-        idx2word.extend([word for (word, _) in wc.most_common(n_most_common)])
-        idx2word.append('<unk>')
-        return Dictionary(idx2word)
-
-    def get_label_sent_words(self, record):
-        return [(lb_s[0], self.get_sent_words(lb_s[1])) for lb_s in record['review_sentences']]
-
-    def get_word_count(self, records):
-        wc_artwork = collections.defaultdict(lambda: collections.Counter())
-        for record in records:
-            artwork_id = record['book_id']
-            for (_, words) in self.get_label_sent_words(record):
-                wc_artwork[artwork_id].update(words)
-        wc = functools.reduce((lambda x, y: x + y), wc_artwork.values())
-        return wc, wc_artwork
-
-    def get_doc_label_sent_encodes(self, record, word2idx):
-        return [(lb_sw[0], [word2idx[w if w in word2idx else '<unk>'] for w in lb_sw[1]])
-                for lb_sw in self.get_label_sent_words(record)]
-
-    def get_doc_label_sent_encodes_gen(self, records, word2idx):
-        return map(lambda record: self.get_doc_label_sent_encodes(record, word2idx), records)
-
-    def encode(self, n_most_common, limit=None):
-        record_gen = self.get_record_gen(limit)
-        wc, _ = self.get_word_count(record_gen)
-        word_dict = __class__.get_word_dict(wc, n_most_common)
-
-        record_gen = self.get_record_gen(limit)
-        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(record_gen, word_dict.word2idx)
-
-        return doc_label_sent_encodes_gen, word_dict
+        docs, labels, doc_lens, doc_sent_lens = self.pad(doc_label_sent_encodes)
+        self.docs = torch.from_numpy(docs)
+        self.labels = torch.from_numpy(labels)
+        self.doc_lens = torch.from_numpy(doc_lens)
+        self.doc_sent_lens = list(map(torch.from_numpy, doc_sent_lens))
 
     def pad(self, doc_label_sent_encodes, pad_idx=0):
-        docs, labels, doc_lens = [], [], []
+        docs, labels, doc_lens, doc_sent_lens = [], [], [], []
         for label_sent_encodes in doc_label_sent_encodes:
             doc = np.full((self.max_n_sents, self.max_n_words), pad_idx, dtype=np.long)
             sent_labels = []
+            sent_lens = []
             for i, (label, sent) in enumerate(itertools.islice(label_sent_encodes, self.max_n_sents)):
                 sent_len = min((self.max_n_words, len(sent)))
                 doc[i, :sent_len] = sent[:sent_len]
                 sent_labels.append(label)
+                sent_lens.append(sent_len)
             doc_len = min((self.max_n_sents, len(label_sent_encodes)))
-            sent_labels = np.pad(sent_labels, ((0, self.max_n_sents - doc_len)), dtype=np.float)
+            sent_labels = np.pad(np.array(sent_labels, dtype=np.float32), ((0, self.max_n_sents - doc_len)))
             docs.append(doc)
             labels.append(sent_labels)
-            doc_lens.append(doc_len)
-        docs = np.vstack(docs)
-        labels = np.vstack(labels)
-        doc_lens = np.array(doc_lens)
-        return docs, labels, doc_lens
+            doc_sent_lens.append(np.array(sent_lens))
+        docs = np.array(docs)
+        labels = np.array(labels)
+        doc_lens = np.array(list(map(len, doc_sent_lens)))
+        return docs, labels, doc_lens, doc_sent_lens
 
-    def __getitem__(self):
-        pass
+    @staticmethod
+    def get_label_mask(doc_len, max_n_sents):
+        ones = torch.ones(doc_len, dtype=torch.float)
+        zeros = torch.zeros(max_n_sents - doc_len, dtype=torch.float)
+        return torch.cat((ones, zeros))
+
+    def __getitem__(self, idx):
+        return self.docs[idx], self.labels[idx], __class__.get_label_mask(self.doc_lens[idx], self.max_n_sents)
 
     def __len__(self):
-        pass
+        return len(self.docs)
