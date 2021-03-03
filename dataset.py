@@ -5,9 +5,10 @@ import os
 import gzip
 import json
 import pickle
+
 import gdown
 import nltk
-from nltk.tokenize import word_tokenize
+import numpy as np
 import torch
 
 
@@ -50,6 +51,8 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
 
         self.max_n_words = 10
         self.max_n_sents = 10
+
+        self.data = None
 
     def download(self):
         file_dir = os.path.join(self.root, self.base_folder)
@@ -114,29 +117,28 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         word_dict = __class__.get_word_dict(wc, n_most_common)
 
         record_gen = self.get_record_gen(limit)
-        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(
-            record_gen, word_dict.word2idx)
+        doc_label_sent_encodes_gen = self.get_doc_label_sent_encodes_gen(record_gen, word_dict.word2idx)
 
         return doc_label_sent_encodes_gen, word_dict
 
-    def pad(self, doc_label_sent_encodes, pad_idx=0, label_mask=-1):
-        docs, doc_sent_labels = [], []
+    def pad(self, doc_label_sent_encodes, pad_idx=0):
+        docs, labels, doc_lens = [], [], []
         for label_sent_encodes in doc_label_sent_encodes:
-            sents, labels = [], []
-            for label, sent in itertools.islice(label_sent_encodes, self.max_n_sents):
-                if self.max_n_words > len(sent):
-                    sent.extend([pad_idx] * (self.max_n_words - len(sent)))
-                sents.append(sent[:self.max_n_words])
-                labels.append(label)
-            for _ in range(max(0, self.max_n_sents - len(label_sent_encodes))):
-                sents.append([pad_idx] * self.max_n_words)
-                labels.append(label_mask)
-            docs.append(sents)
-            doc_sent_labels.append(labels)
-        docs = torch.tensor(docs, dtype=torch.long)
-        doc_sent_labels = torch.tensor(doc_sent_labels, dtype=torch.float)
-
-        return docs, doc_sent_labels
+            doc = np.full((self.max_n_sents, self.max_n_words), pad_idx, dtype=np.long)
+            sent_labels = []
+            for i, (label, sent) in enumerate(itertools.islice(label_sent_encodes, self.max_n_sents)):
+                sent_len = min((self.max_n_words, len(sent)))
+                doc[i, :sent_len] = sent[:sent_len]
+                sent_labels.append(label)
+            doc_len = min((self.max_n_sents, len(label_sent_encodes)))
+            sent_labels = np.pad(sent_labels, ((0, self.max_n_sents - doc_len)), dtype=np.float)
+            docs.append(doc)
+            labels.append(sent_labels)
+            doc_lens.append(doc_len)
+        docs = np.vstack(docs)
+        labels = np.vstack(labels)
+        doc_lens = np.array(doc_lens)
+        return docs, labels, doc_lens
 
     def __getitem__(self):
         pass
