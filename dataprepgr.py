@@ -41,7 +41,7 @@ def get_record_gen(limit=None):
         for l in itertools.islice(fin, limit):
             d = json.loads(l)
             count += 1
-            if not (count % 10000):
+            if not (count % 100000):
                 logger.debug('Processed {} records'.format(count))
             yield d
 
@@ -102,8 +102,9 @@ def save(obj, filename):
 
 
 # %%
-(word2idx, idx2word) = build_vocab_meta(get_record_gen(), n_most_common)
-doc_encode = process(get_record_gen(), word2idx)
+limit = 5000
+(word2idx, idx2word) = build_vocab_meta(get_record_gen(5000), n_most_common)
+doc_encode = process(get_record_gen(5000), word2idx)
 obj = {'doc_label_sent_encodes': doc_encode, 'idx2word': idx2word}
 save(obj, 'mappings')
 

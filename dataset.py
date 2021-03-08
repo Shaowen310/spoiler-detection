@@ -69,13 +69,15 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
             doc = np.full((self.max_n_sents, self.max_n_words), pad_idx, dtype=np.long)
             sent_labels = []
             sent_lens = []
-            for i, (label, sent) in enumerate(itertools.islice(label_sent_encodes, self.max_n_sents)):
+            for i, (label, sent) in enumerate(itertools.islice(label_sent_encodes,
+                                                               self.max_n_sents)):
                 sent_len = min((self.max_n_words, len(sent)))
                 doc[i, :sent_len] = sent[:sent_len]
                 sent_labels.append(label)
                 sent_lens.append(sent_len)
             doc_len = min((self.max_n_sents, len(label_sent_encodes)))
-            sent_labels = np.pad(np.array(sent_labels, dtype=np.float32), ((0, self.max_n_sents - doc_len)))
+            sent_labels = np.pad(np.array(sent_labels, dtype=np.long),
+                                 ((0, self.max_n_sents - doc_len)))
             docs.append(doc)
             labels.append(sent_labels)
             doc_sent_lens.append(np.array(sent_lens))
@@ -84,14 +86,8 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         doc_lens = np.array(list(map(len, doc_sent_lens)))
         return docs, labels, doc_lens, doc_sent_lens
 
-    @staticmethod
-    def get_label_mask(doc_len, max_n_sents):
-        ones = torch.ones(doc_len, dtype=torch.float)
-        zeros = torch.zeros(max_n_sents - doc_len, dtype=torch.float)
-        return torch.cat((ones, zeros))
-
     def __getitem__(self, idx):
-        return self.docs[idx], self.labels[idx], __class__.get_label_mask(self.doc_lens[idx], self.max_n_sents)
+        return self.docs[idx], self.labels[idx], self.doc_lens[idx]
 
     def __len__(self):
         return len(self.docs)
