@@ -51,7 +51,7 @@ class SpoilerNet(nn.Module):
         x = x.permute(1, 0, 2)
         # (sent_seq_len, batch, word_seq_len)
 
-        sentlv_sent_encs = []
+        sentlv_sent_enc_list = []
         for sent in x:
             sent = sent.permute(1, 0)
             # (word_seq_len, batch)
@@ -63,9 +63,9 @@ class SpoilerNet(nn.Module):
             sentlv_sent_enc = self.word_att(sentlv_word_encs)
             # (batch, num_directions * hidden_size)
 
-            sentlv_sent_encs.append(sentlv_sent_enc)
+            sentlv_sent_enc_list.append(sentlv_sent_enc)
 
-        sentlv_sent_encs = torch.stack(sentlv_sent_encs, 0)
+        sentlv_sent_encs = torch.stack(sentlv_sent_enc_list)
         # (sent_seq_len, batch, num_directions * hidden_size)
 
         doclv_sent_enc, sent_h0 = self.sent_encoder(sentlv_sent_encs, sent_h0)
@@ -74,7 +74,7 @@ class SpoilerNet(nn.Module):
         doclv_sent_enc = doclv_sent_enc.permute(1, 0, 2)
         # (batch, sent_seq_len, num_directions * hidden_size)
 
-        doclv_sent_enc = doclv_sent_enc.reshape(-1, 2 * self.cell_dim)
-        # (batch, sent_seq_len, num_directions * hidden_size)
+        doclv_sent_enc = doclv_sent_enc.contiguous().view(-1, 2 * self.cell_dim)
+        # (batch * sent_seq_len, num_directions * hidden_size)
 
         return doclv_sent_enc, word_h0, sent_h0

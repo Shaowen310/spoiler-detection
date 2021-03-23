@@ -42,21 +42,18 @@ def train_one_epoch(epoch,
     log_loss = 0
     start_time = time.time()
 
-    word_h0 = model.init_hidden(batch_size).to(device)
-    sent_h0 = model.init_hidden(batch_size).to(device)
-
     for batch, (elems, labels, _) in enumerate(dataloader):
         elems = elems.to(device)
         labels = labels.to(device)
 
         optimizer.zero_grad()
 
+        word_h0 = model.init_hidden(len(elems)).to(device)
+        sent_h0 = model.init_hidden(len(elems)).to(device)
         preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0)
         labels = labels.view(-1)
         loss = criterion(preds, labels)
 
-        torch.autograd.set_detect_anomaly(True)
-        loss.backward(retain_graph=True)
         optimizer.step()
 
         batch_loss = loss.item()
@@ -76,17 +73,17 @@ def train_one_epoch(epoch,
 
 
 # %%
-cell_dim = 10
-att_dim = 20
-vocab_size = 5000
+cell_dim = 15
+att_dim = 15
+vocab_size = 5002
 emb_size = 50
-lr = 0.001
+lr = 0.1
 mom = 0.9
 
 model = SpoilerNet(cell_dim=cell_dim, att_dim=att_dim, vocab_size=vocab_size, emb_size=emb_size)
 criterion = torch.nn.CrossEntropyLoss()
 
-device = torch.device('cuda')
+device = torch.device('cpu')
 model.to(device)
 criterion.to(device)
 
