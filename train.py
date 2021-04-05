@@ -4,6 +4,7 @@ import time
 import math
 import pickle
 
+import numpy as np
 import torch
 
 from dataset import GoodreadsReviewsSpoilerDataset
@@ -23,18 +24,19 @@ train_portion, dev_portion, test_portion = 0.8, 0.1, 0.1
 # Load
 with open(data_file, 'rb') as f:
     data = pickle.load(f)
-doc_label_sent_encodes = data['doc_label_sent_encodes']
+doc_label_sents = data['doc_label_sents']
 itow = data['itow']
-
 
 # %%
 # Split train, dev, test
+n_docs = len(doc_label_sents)
+n_train_dev = math.floor((train_portion+dev_portion) * n_docs)
+n_train = math.floor(train_portion * n_docs)
 
 
-ds_train = GoodreadsReviewsSpoilerDataset(doc_label_sent_encodes, itow, max_n_words, max_n_sents)
+
+ds_train = GoodreadsReviewsSpoilerDataset(doc_label_sents, itow, max_n_words, max_n_sents)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size)
-
-
 
 
 # %% [markdown]
@@ -88,9 +90,9 @@ def train_one_epoch(epoch,
 
 
 # %%
-cell_dim = 15
-att_dim = 15
-vocab_size = 5002
+cell_dim = 64
+att_dim = 32
+vocab_size = len(itow)
 emb_size = 50
 lr = 0.1
 mom = 0.9

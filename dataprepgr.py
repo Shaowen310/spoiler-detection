@@ -13,6 +13,8 @@ import string
 
 import gdown
 from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import PorterStemmer
 
 import loggingutil
 
@@ -24,6 +26,9 @@ filename = 'goodreads_reviews_spoiler.json.gz'
 
 logger = loggingutil.get_logger('dataprepgr')
 
+# %%
+STOP_WORDS = set(stopwords.words('english'))
+_porter = PorterStemmer()
 # %%
 # Download
 file_dir = os.path.join(root, base_folder)
@@ -55,21 +60,34 @@ def load_records(limit=None):
 def remove_punc(token):
     return token.translate(str.maketrans('', '', string.punctuation))
 
+
 def get_sent_words(sent):
-    # replace http
-    sent = re.sub(r'(http|https)://\S+', '<http>', sent)
-    
     # case-folding
     sent = sent.lower()
+
+    # replace http
+    sent = re.sub(r'(http|https)://\S+', '^http', sent)
+
+    # replace digits
+    sent = re.sub(r'\d+', ' ^num ', sent)
 
     # tokenize
     words = word_tokenize(sent)
 
-    # remove punctuation
-    # words = map(lambda w: remove_punc(w), words)
+    # split '-'
+    words = itertools.chain(*map(lambda w: w.split('-'), words))
 
+    # remove punctuation
+    words = map(lambda w: remove_punc(w) if w not in ['^http', '^num'] else w, words)
+    
     # remove empty
     words = filter(lambda w: w, words)
+
+    # remove stopwords
+    words = filter(lambda w: w not in STOP_WORDS, words)
+
+    # stemming
+    words = map(lambda w: _porter.stem(w), words)
 
     words = list(words)
     return words
