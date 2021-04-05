@@ -54,8 +54,8 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
             data = pickle.load(f)
 
         doc_label_sent_encodes = data['doc_label_sent_encodes']
-        self.idx2word = data['idx2word']
-        self.word2idx = {w: i for i, w in enumerate(self.idx2word)}
+        self.itow = data['itow']
+        self.wtoi = {w: i for i, w in enumerate(self.itow)}
 
         docs, labels, doc_lens, doc_sent_lens = self.pad(doc_label_sent_encodes)
         self.docs = torch.from_numpy(docs)

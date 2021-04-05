@@ -10,7 +10,7 @@ import json
 import pickle
 
 import gdown
-import nltk
+from nltk.tokenize import word_tokenize
 
 import loggingutil
 
@@ -19,9 +19,6 @@ root = 'data_'
 base_folder = 'goodreads-reviews-spoiler'
 URL = 'https://drive.google.com/uc?id=196W2kDoZXRPjzbTjM6uvTidn6aTpsFnS'
 filename = 'goodreads_reviews_spoiler.json.gz'
-
-word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
-n_most_common = 5000
 
 logger = loggingutil.get_logger('dataprepgr')
 
@@ -35,26 +32,26 @@ if not os.path.exists(file_path):
 
 
 # Load
-def get_record_gen(limit=None):
+def generate_records(limit=None, log_every=10000):
     count = 0
     with gzip.open(file_path) as fin:
         for l in itertools.islice(fin, limit):
             d = json.loads(l)
             count += 1
-            if not (count % 100000):
+            if not (count % log_every):
                 logger.debug('Processed {} records'.format(count))
             yield d
 
 
 def load_records(limit=None):
-    return list(get_record_gen(limit))
+    return list(generate_records(limit))
 
 
 # %%
 # Reusable
 def get_sent_words(sent):
     # tokenize
-    words = word_tokenizer.tokenize(sent)
+    words = word_tokenize(sent)
     # transform & filter
     # => lower? stop words? punctuation? HTTP? digits? misspelled?
     return words
@@ -78,21 +75,23 @@ def get_doc_label_sent_encodes(label_sents, word2idx):
 
 
 # %%
-def build_vocab_meta(records, n_most_common):
+def word_count(records):
     # word frequency
     wc_artwork = collections.defaultdict(lambda: collections.Counter())
     for record in records:
         artwork_id = record['book_id']
         for (_, words) in get_label_sent_words(record['review_sentences']):
             wc_artwork[artwork_id].update(words)
+    
     wc = functools.reduce((lambda x, y: x + y), wc_artwork.values(), collections.Counter())
 
     # vocab
-    return get_word_dict(wc, n_most_common)
+    return wc, wc_artwork
 
 
 def process(records, word2idx):
     doc_encode = [get_doc_label_sent_encodes(record['review_sentences'], word2idx) for record in records]
+    logger.info('Total number of docs: {}', str(len(doc_encode)))
     return doc_encode
 
 
@@ -102,10 +101,13 @@ def save(obj, filename):
 
 
 # %%
-limit = 5000
-(word2idx, idx2word) = build_vocab_meta(get_record_gen(5000), n_most_common)
-doc_encode = process(get_record_gen(5000), word2idx)
-obj = {'doc_label_sent_encodes': doc_encode, 'idx2word': idx2word}
-save(obj, 'mappings')
+limit = None
+n_most_common = None
+
+wc, wc_artwork = word_count(generate_records(limit))
+wtoi, itow = get_word_dict(wc, n_most_common)
+doc_encode = process(generate_records(limit), wtoi)
+obj = {'doc_label_sent_encodes': doc_encode, 'itow': itow, 'wc_artwork': wc_artwork}
+save(obj, 'mappings_{}_{}'.format('all' if limit is None else str(limit), 'all' if n_most_common is None else str(n_most_common)))
 
 # %%
