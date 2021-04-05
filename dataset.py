@@ -44,11 +44,11 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         self.itow = itow
         self.wtoi = {w: i for i, w in enumerate(self.itow)}
 
-        docs, labels, doc_lens, doc_sent_lens = self.pad(doc_label_sents)
+        docs, labels, doc_len_masks, doc_sent_lens = self.pad(doc_label_sents)
         self.docs = torch.from_numpy(docs)
         self.labels = torch.from_numpy(labels)
-        self.doc_lens = torch.from_numpy(doc_lens)
-        self.doc_sent_lens = list(map(torch.from_numpy, doc_sent_lens))
+        self.doc_len_masks = torch.from_numpy(doc_len_masks)
+        self.doc_sent_lens = doc_sent_lens
 
     def pad(self, doc_label_sents, pad_idx=0):
         docs, labels, doc_lens, doc_sent_lens = [], [], [], []
@@ -71,10 +71,14 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         docs = np.array(docs)
         labels = np.array(labels)
         doc_lens = np.array(list(map(len, doc_sent_lens)))
-        return docs, labels, doc_lens, doc_sent_lens
+        doc_len_masks = np.zeros((len(doc_lens), self.max_n_sents), dtype=np.float32)
+        for idx, doc_len in enumerate(doc_lens):
+            doc_len_masks[idx, :doc_len] = 1
+        return docs, labels, doc_len_masks, doc_sent_lens
+        
 
     def __getitem__(self, idx):
-        return self.docs[idx], self.labels[idx], self.doc_lens[idx]
+        return self.docs[idx], self.labels[idx], self.doc_len_masks[idx]
 
     def __len__(self):
         return len(self.docs)

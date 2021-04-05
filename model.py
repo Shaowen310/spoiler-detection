@@ -40,6 +40,7 @@ class SpoilerNet(nn.Module):
         self.word_encoder = nn.GRU(emb_size, cell_dim, bidirectional=True)
         self.word_att = WordAttentionLayer(2 * cell_dim, att_dim)
         self.sent_encoder = nn.GRU(2 * cell_dim, cell_dim, bidirectional=True)
+        self.out_linear = nn.Linear(2 * cell_dim, 1)
 
     def init_hidden(self, batch_size):
         return torch.zeros(2, batch_size, self.cell_dim)
@@ -74,7 +75,9 @@ class SpoilerNet(nn.Module):
         doclv_sent_enc = doclv_sent_enc.permute(1, 0, 2)
         # (batch, sent_seq_len, num_directions * hidden_size)
 
-        doclv_sent_enc = doclv_sent_enc.contiguous().view(-1, 2 * self.cell_dim)
-        # (batch * sent_seq_len, num_directions * hidden_size)
+        doclv_sent_enc = self.out_linear(doclv_sent_enc)
+
+        doclv_sent_enc = doclv_sent_enc.view(-1)
+        # (batch * sent_seq_len)
 
         return doclv_sent_enc, word_h0, sent_h0

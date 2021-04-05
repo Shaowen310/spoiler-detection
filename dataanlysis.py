@@ -7,8 +7,6 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
-import dataset
-
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
 data_file = os.path.join(data_dir, 'mappings_5000_all.pkl')
@@ -44,7 +42,9 @@ plt.savefig('plot_/box_doc_len.pdf')
 print('25, 50, 75 percentile of doc len: {}'.format(str(np.percentile(doc_lens, [25, 50, 75]))))
 
 max_doc_len = 30
-print('percentile for doc len {}: {}'.format(max_doc_len, np.count_nonzero(np.array(doc_lens) <= max_doc_len)/n_docs))
+print('percentile for doc len {}: {}'.format(
+    max_doc_len,
+    np.count_nonzero(np.array(doc_lens) <= max_doc_len) / n_docs))
 
 # %%
 sent_lens = [len(label_sent[1]) for label_sent in itertools.chain(*doc_label_sents)]
@@ -67,8 +67,10 @@ plt.savefig('plot_/box_sent_len.pdf')
 
 print('25, 50, 75 percentile of sent len: {}'.format(str(np.percentile(sent_lens, [25, 50, 75]))))
 
-max_sent_len =  25
-print('percentile for doc len {}: {}'.format(max_sent_len, np.count_nonzero(np.array(sent_lens) <= max_sent_len)/n_sents))
+max_sent_len = 25
+print('percentile for doc len {}: {}'.format(
+    max_sent_len,
+    np.count_nonzero(np.array(sent_lens) <= max_sent_len) / n_sents))
 
 # %%
 freq = 1
