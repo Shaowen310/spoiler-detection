@@ -1,12 +1,6 @@
-import collections
 import itertools
-import functools
-import os
-import gzip
-import json
 import pickle
 
-import gdown
 import nltk
 import numpy as np
 import torch
@@ -41,20 +35,13 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     filename = 'goodreads_reviews_spoiler.json.gz'
     word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
 
-    def __init__(self, datafile, max_n_words, max_n_sents):
+    def __init__(self, doc_label_sent_encodes, itow, max_n_words, max_n_sents):
         super().__init__()
-
-        self.datafile = datafile
 
         self.max_n_words = max_n_words
         self.max_n_sents = max_n_sents
 
-        data = None
-        with open(datafile, 'rb') as f:
-            data = pickle.load(f)
-
-        doc_label_sent_encodes = data['doc_label_sent_encodes']
-        self.itow = data['itow']
+        self.itow = itow
         self.wtoi = {w: i for i, w in enumerate(self.itow)}
 
         docs, labels, doc_lens, doc_sent_lens = self.pad(doc_label_sent_encodes)

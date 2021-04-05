@@ -32,7 +32,7 @@ if not os.path.exists(file_path):
 
 
 # Load
-def generate_records(limit=None, log_every=10000):
+def generate_records(limit=None, log_every=100000):
     count = 0
     with gzip.open(file_path) as fin:
         for l in itertools.islice(fin, limit):
@@ -107,7 +107,7 @@ n_most_common = None
 wc, wc_artwork = word_count(generate_records(limit))
 wtoi, itow = get_word_dict(wc, n_most_common)
 doc_encode = process(generate_records(limit), wtoi)
-obj = {'doc_label_sent_encodes': doc_encode, 'itow': itow, 'wc_artwork': wc_artwork}
+obj = {'doc_label_sents': doc_encode, 'itow': itow, 'wc': wc, 'wc_artwork': wc_artwork}
 save(obj, 'mappings_{}_{}'.format('all' if limit is None else str(limit), 'all' if n_most_common is None else str(n_most_common)))
 
 # %%

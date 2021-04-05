@@ -2,6 +2,7 @@
 import os
 import time
 import math
+import pickle
 
 import torch
 
@@ -12,14 +13,28 @@ from model import SpoilerNet
 # ## Data
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-train_file = os.path.join(data_dir, 'mappings.pkl')
-max_n_words = 20
-max_n_sents = 10
-
+data_file = os.path.join(data_dir, 'mappings.pkl')
+max_n_words = 25
+max_n_sents = 30
 batch_size = 32
+train_portion, dev_portion, test_portion = 0.8, 0.1, 0.1
 
-ds_train = GoodreadsReviewsSpoilerDataset(train_file, max_n_words, max_n_sents)
+# %%
+# Load
+with open(data_file, 'rb') as f:
+    data = pickle.load(f)
+doc_label_sent_encodes = data['doc_label_sent_encodes']
+itow = data['itow']
+
+
+# %%
+# Split train, dev, test
+
+
+ds_train = GoodreadsReviewsSpoilerDataset(doc_label_sent_encodes, itow, max_n_words, max_n_sents)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size)
+
+
 
 
 # %% [markdown]
