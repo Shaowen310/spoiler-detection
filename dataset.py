@@ -35,7 +35,7 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     filename = 'goodreads_reviews_spoiler.json.gz'
     word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
 
-    def __init__(self, doc_label_sent_encodes, itow, max_n_words, max_n_sents):
+    def __init__(self, doc_label_sents, itow, max_n_words, max_n_sents):
         super().__init__()
 
         self.max_n_words = max_n_words
@@ -44,15 +44,15 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         self.itow = itow
         self.wtoi = {w: i for i, w in enumerate(self.itow)}
 
-        docs, labels, doc_lens, doc_sent_lens = self.pad(doc_label_sent_encodes)
+        docs, labels, doc_lens, doc_sent_lens = self.pad(doc_label_sents)
         self.docs = torch.from_numpy(docs)
         self.labels = torch.from_numpy(labels)
         self.doc_lens = torch.from_numpy(doc_lens)
         self.doc_sent_lens = list(map(torch.from_numpy, doc_sent_lens))
 
-    def pad(self, doc_label_sent_encodes, pad_idx=0):
+    def pad(self, doc_label_sents, pad_idx=0):
         docs, labels, doc_lens, doc_sent_lens = [], [], [], []
-        for label_sent_encodes in doc_label_sent_encodes:
+        for label_sent_encodes in doc_label_sents:
             doc = np.full((self.max_n_sents, self.max_n_words), pad_idx, dtype=np.long)
             sent_labels = []
             sent_lens = []

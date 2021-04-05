@@ -8,6 +8,8 @@ import os
 import gzip
 import json
 import pickle
+import re
+import string
 
 import gdown
 from nltk.tokenize import word_tokenize
@@ -22,6 +24,7 @@ filename = 'goodreads_reviews_spoiler.json.gz'
 
 logger = loggingutil.get_logger('dataprepgr')
 
+# %%
 # Download
 file_dir = os.path.join(root, base_folder)
 if not os.path.exists(file_dir):
@@ -49,11 +52,26 @@ def load_records(limit=None):
 
 # %%
 # Reusable
+def remove_punc(token):
+    return token.translate(str.maketrans('', '', string.punctuation))
+
 def get_sent_words(sent):
+    # replace http
+    sent = re.sub(r'(http|https)://\S+', '<http>', sent)
+    
+    # case-folding
+    sent = sent.lower()
+
     # tokenize
     words = word_tokenize(sent)
-    # transform & filter
-    # => lower? stop words? punctuation? HTTP? digits? misspelled?
+
+    # remove punctuation
+    # words = map(lambda w: remove_punc(w), words)
+
+    # remove empty
+    words = filter(lambda w: w, words)
+
+    words = list(words)
     return words
 
 
@@ -82,7 +100,9 @@ def word_count(records):
         artwork_id = record['book_id']
         for (_, words) in get_label_sent_words(record['review_sentences']):
             wc_artwork[artwork_id].update(words)
-    
+
+    logger.info('# of books: {}'.format(len(wc_artwork)))
+
     wc = functools.reduce((lambda x, y: x + y), wc_artwork.values(), collections.Counter())
 
     # vocab
@@ -90,8 +110,10 @@ def word_count(records):
 
 
 def process(records, word2idx):
-    doc_encode = [get_doc_label_sent_encodes(record['review_sentences'], word2idx) for record in records]
-    logger.info('Total number of docs: {}', str(len(doc_encode)))
+    doc_encode = [
+        get_doc_label_sent_encodes(record['review_sentences'], word2idx) for record in records
+    ]
+    logger.info('# of docs: {}'.format(str(len(doc_encode))))
     return doc_encode
 
 
@@ -101,13 +123,15 @@ def save(obj, filename):
 
 
 # %%
-limit = None
+limit = 5000
 n_most_common = None
 
 wc, wc_artwork = word_count(generate_records(limit))
 wtoi, itow = get_word_dict(wc, n_most_common)
 doc_encode = process(generate_records(limit), wtoi)
-obj = {'doc_label_sents': doc_encode, 'itow': itow, 'wc': wc, 'wc_artwork': wc_artwork}
-save(obj, 'mappings_{}_{}'.format('all' if limit is None else str(limit), 'all' if n_most_common is None else str(n_most_common)))
+obj = {'doc_label_sents': doc_encode, 'itow': itow, 'wc': dict(wc), 'wc_artwork': dict(wc_artwork)}
+save(
+    obj, 'mappings_{}_{}'.format('all' if limit is None else str(limit),
+                                 'all' if n_most_common is None else str(n_most_common)))
 
 # %%

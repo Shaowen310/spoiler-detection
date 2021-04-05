@@ -11,14 +11,16 @@ import dataset
 
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-data_file = os.path.join(data_dir, 'mappings.pkl')
+data_file = os.path.join(data_dir, 'mappings_5000_all.pkl')
 
 # %%
 # Load
 with open(data_file, 'rb') as f:
     data = pickle.load(f)
-doc_label_sents = data['doc_label_sent_encodes']
-itow = data['idx2word']
+doc_label_sents = data['doc_label_sents']
+itow = data['itow']
+wc = data['wc']
+wc_artwork = data['wc_artwork']
 
 # %%
 # doc len, sent len
@@ -69,9 +71,14 @@ max_sent_len =  25
 print('percentile for doc len {}: {}'.format(max_sent_len, np.count_nonzero(np.array(sent_lens) <= max_sent_len)/n_sents))
 
 # %%
+freq = 1
+words = list(filter(lambda t: t[1] <= freq, wc.items()))
+print(words)
+
+# %%
 # tf-idf
-doc_label_sent_encodes_gen, word_dict = ds.encode(10, 10)
-doc_label_sents = list(doc_label_sent_encodes_gen)
-docs, labels, doc_lens = ds.pad(doc_label_sents)
+# doc_label_sent_encodes_gen, word_dict = ds.encode(10, 10)
+# doc_label_sents = list(doc_label_sent_encodes_gen)
+# docs, labels, doc_lens = ds.pad(doc_label_sents)
 
 # %%
