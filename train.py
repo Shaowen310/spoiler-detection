@@ -26,7 +26,7 @@ data_file = os.path.join(data_dir, 'mappings_20000_all.pkl')
 max_sent_len = 25
 max_doc_len = 30
 batch_size = 32
-train_portion, dev_portion, test_portion = 0.5, 0.25
+train_portion, dev_portion = 0.5, 0.25
 
 params['max_sent_len'] = max_sent_len
 params['max_doc_len'] = max_doc_len
