@@ -141,7 +141,7 @@ def save(obj, filename):
 
 
 # %%
-limit = 5000
+limit = 20000
 n_most_common = None
 
 wc, wc_artwork = word_count(generate_records(limit))
