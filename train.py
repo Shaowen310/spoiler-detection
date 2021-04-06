@@ -51,7 +51,7 @@ def train_dev_test_split(d: Sequence, train_size: float, dev_size: float):
     return d_train, d_dev, d_test
 
 
-d_train, d_dev, d_test = train_dev_test_split(doc_label_sents, train_portion, test_portion)
+d_train, d_dev, d_test = train_dev_test_split(doc_label_sents, train_portion, dev_portion)
 
 ds_train = GoodreadsReviewsSpoilerDataset(d_train, itow, max_sent_len, max_doc_len)
 ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, itow, max_sent_len, max_doc_len)
