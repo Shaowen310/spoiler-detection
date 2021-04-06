@@ -7,22 +7,29 @@ from typing import Sequence
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import sklearn.metrics as metrics
 
+import loggingutil
 from dataset import GoodreadsReviewsSpoilerDataset
 from model import SpoilerNet
+from paramstore import ParamStore
+
+_logger = loggingutil.get_logger('train')
+paramstore = ParamStore()
+params = {}
 
 # %% [markdown]
 # ## Data
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
 data_file = os.path.join(data_dir, 'mappings_5000_all.pkl')
-max_n_words = 10
-max_n_sents = 30
+max_sent_len = 25
+max_doc_len = 30
 batch_size = 32
 train_portion, dev_portion, test_portion = 0.8, 0.1, 0.1
 
+params['max_sent_len'] = max_sent_len
+params['max_doc_len'] = max_doc_len
 # %%
 # Load
 with open(data_file, 'rb') as f:
@@ -46,10 +53,36 @@ def train_dev_test_split(d: Sequence, train_size: float, dev_size: float):
 
 d_train, d_dev, d_test = train_dev_test_split(doc_label_sents, train_portion, test_portion)
 
-ds_train = GoodreadsReviewsSpoilerDataset(d_train, itow, max_n_words, max_n_sents)
-ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, itow, max_n_words, max_n_sents)
-dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size)
+ds_train = GoodreadsReviewsSpoilerDataset(d_train, itow, max_sent_len, max_doc_len)
+ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, itow, max_sent_len, max_doc_len)
+dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=True)
 dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
+
+# %%
+model_name = 'spoilernet'
+cell_dim = 64
+att_dim = 32
+vocab_size = len(itow)
+emb_size = 50
+
+params['cell_dim'] = cell_dim
+params['att_dim'] = att_dim
+params['vocab_size'] = vocab_size
+params['emb_size'] = emb_size
+
+model_id = paramstore.add(model_name, params)
+
+_logger = loggingutil.get_logger(model_id)
+
+model = SpoilerNet(cell_dim=cell_dim, att_dim=att_dim, vocab_size=vocab_size, emb_size=emb_size)
+criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
+
+device = torch.device('cuda:0')
+model.to(device)
+criterion.to(device)
+
+optimizer = torch.optim.Adam(model.parameters())
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
 
 # %% [markdown]
@@ -98,11 +131,9 @@ def train_one_epoch(epoch, model, dataloader, optimizer, criterion, device, log_
     return epoch_loss / len(dataloader)
 
 
-def f1_score(y_true, y_pred, mask, threshold=0.5):
-    y_true = y_true[np.nonzero(mask)]
-    y_pred = y_pred[np.nonzero(mask)]
-    y_pred = np.nonzero(y_pred >= threshold)
-    return metrics.f1_score(y_true, y_pred)
+def f1_score(y_true, y_pred, threshold=0.5):
+    y_pred_lb = y_pred >= threshold
+    return metrics.f1_score(y_true, y_pred_lb)
 
 
 def evaluate(model, dataloader, criterion, device='cpu'):
@@ -129,44 +160,47 @@ def evaluate(model, dataloader, criterion, device='cpu'):
             loss *= sentmasks
             loss = torch.sum(loss) / torch.count_nonzero(sentmasks)
 
+            epoch_loss += loss.item()
+
             labelss.append(labels)
             predss.append(preds)
             sentmaskss.append(sentmasks)
 
-    labels = torch.cat(labelss)
-    preds = torch.cat(predss)
-    sentmasks = torch.cat(sentmaskss)
-    f1 = f1_score(labels, preds, sentmasks)
+        labels = torch.cat(labelss).detach().cpu().numpy()
+        preds = torch.sigmoid(torch.cat(predss).detach()).cpu().numpy()
+        sentmasks = torch.cat(sentmaskss).detach().cpu().numpy()
+        labels = labels[np.nonzero(sentmasks)]
+        preds = preds[np.nonzero(sentmasks)]
 
-    return epoch_loss / len(dataloader), f1
+        f1 = f1_score(labels, preds, 0.05)
+        roc_auc = metrics.roc_auc_score(labels, preds)
 
+    return epoch_loss / len(dataloader), f1, roc_auc
 
-# %%
-cell_dim = 64
-att_dim = 32
-vocab_size = len(itow)
-emb_size = 50
-lr = 0.01
-mom = 0.9
-
-model = SpoilerNet(cell_dim=cell_dim, att_dim=att_dim, vocab_size=vocab_size, emb_size=emb_size)
-criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
-
-device = torch.device('cuda:0')
-model.to(device)
-criterion.to(device)
-
-optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=mom)
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
 # %%
-for epoch in range(5):
+dev_loss_lowest = 1000
+patience = 10
+no_drop_epochs = 0
+n_epochs = 50
+for epoch in range(n_epochs):
+    if no_drop_epochs >= patience:
+        break
     epoch_loss = 0
 
     epoch_loss = train_one_epoch(epoch, model, dl_train, optimizer, criterion, device)
 
-    print('| epoch {} | epoch_loss {} |'.format(epoch, epoch_loss))
+    dev_loss, dev_f1, dev_roc_auc = evaluate(model, dl_dev, criterion, device)
 
-    evaluate(model, dl_dev, criterion)
+    _logger.info(
+        '| epoch {} | epoch_loss {:.6f} | dev_loss {:.6f} | dev_f1 {:.3f} | dev_roc_auc {:.3f}'.
+        format(epoch, epoch_loss, dev_loss, dev_f1, dev_roc_auc))
+
+    if dev_loss < dev_loss_lowest:
+        dev_loss_lowest = dev_loss
+        torch.save(model.state_dict(), os.path.join('model_', model_id + '.pt'))
+        no_drop_epochs = 0
+    else:
+        no_drop_epochs += 1
 
 # %%

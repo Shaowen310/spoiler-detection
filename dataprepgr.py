@@ -87,7 +87,7 @@ def get_sent_words(sent):
     words = filter(lambda w: w not in STOP_WORDS, words)
 
     # stemming
-    words = map(lambda w: _porter.stem(w), words)
+    # words = map(lambda w: _porter.stem(w), words)
 
     words = list(words)
     return words

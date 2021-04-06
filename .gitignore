@@ -130,5 +130,7 @@ dmypy.json
 
 data_
 plot_
+model_
+param_
 
 .vscode/settings.json
