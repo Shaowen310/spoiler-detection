@@ -7,9 +7,15 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
+from dataprepgr import generate_records
+
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
 data_file = os.path.join(data_dir, 'mappings_5000_all.pkl')
+
+# %%
+# one_record = list(generate_records(1))
+# print(one_record[0].keys())
 
 # %%
 # Load
