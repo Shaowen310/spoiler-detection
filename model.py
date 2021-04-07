@@ -37,7 +37,7 @@ class SpoilerNet(nn.Module):
         self.emb_size = emb_size
 
         self.emb_layer = nn.Embedding(vocab_size, emb_size, 0)
-        self.word_encoder = nn.GRU(emb_size, cell_dim, bidirectional=True)
+        self.word_encoder = nn.GRU(emb_size + 1, cell_dim, bidirectional=True)
         self.word_att = WordAttentionLayer(2 * cell_dim, att_dim)
         self.sent_encoder = nn.GRU(2 * cell_dim, cell_dim, bidirectional=True)
         self.out_linear = nn.Linear(2 * cell_dim, 1)
@@ -45,20 +45,26 @@ class SpoilerNet(nn.Module):
     def init_hidden(self, batch_size):
         return torch.zeros(2, batch_size, self.cell_dim)
 
-    def forward(self, x, word_h0, sent_h0):
+    def forward(self, x, word_h0, sent_h0, x_df_idf):
         '''
         x size: (batch, sent_seq_len, word_seq_len)
         '''
         x = x.permute(1, 0, 2)
         # (sent_seq_len, batch, word_seq_len)
+        x_df_idf = x_df_idf.permute(1, 0, 2)
 
         sentlv_sent_enc_list = []
-        for sent in x:
+        for i in range(len(x)):
+            sent = x[i]
+            sent_df_idf = x_df_idf[i]
+
             sent = sent.permute(1, 0)
             # (word_seq_len, batch)
+            sent_df_idf = sent_df_idf.permute(1, 0).unsqueeze(2)
 
             word_emb = self.emb_layer(sent)
-            sentlv_word_encs, word_h0 = self.word_encoder(word_emb, word_h0)
+            word_emb_idf = torch.cat((word_emb, sent_df_idf), 2)
+            sentlv_word_encs, word_h0 = self.word_encoder(word_emb_idf, word_h0)
             # (word_seq_len, batch, num_directions * hidden_size)
 
             sentlv_sent_enc = self.word_att(sentlv_word_encs)

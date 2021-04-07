@@ -141,27 +141,33 @@ def process(records, word2idx):
     return doc_encode, doc_artwork
 
 
-def df_idf(word, artwork_id, doc_artwork, wc_review, wc_artwork):
-    d_i = 0
-    for a in doc_artwork:
-        if a == artwork_id:
-            d_i += 1
-    d_wi = 0
-    for wc in wc_review:
-        if word in wc:
-            d_wi += 1
+def prepare_invmap(doc_artwork, wc_review, wc_artwork):
+    atod = collections.defaultdict(lambda: [])
+    for d, a in enumerate(doc_artwork):
+        atod[a].append(d)
+    wtor = collections.defaultdict(lambda: [])
+    for r, wc in enumerate(wc_review):
+        for w in wc.keys():
+            wtor[w].append(r)
+    wtoa = collections.defaultdict(lambda: [])
+    for a, wc in wc_artwork.items():
+        for w in wc.keys():
+            wtoa[w].append(a)
+    return dict(atod), dict(wtor), dict(wtoa)
+
+
+def df_idf(word, artwork_id, atod, wtor, wtoa):
+    d_i = len(atod[artwork_id])
+    d_wi = len(wtor[word])
     df = d_wi / d_i
     e = 1
-    l_w = 0
-    for wc in wc_artwork.values():
-        if word in wc:
-            l_w += 1
-    l = len(wc_artwork.keys())
+    l_w = len(wtoa[word])
+    l = len(atod.keys())
     iif = math.log((l + e) / (l_w + e))
     return df * iif
 
 
-def process_df_idf(doc_encode, doc_artwork, itow, wc_review, wc_artwork):
+def process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa, log_every=1000):
     doc_df_idf = []
     for i in range(len(doc_encode)):
         doc_label_sent_encodes = doc_encode[i]
@@ -173,7 +179,7 @@ def process_df_idf(doc_encode, doc_artwork, itow, wc_review, wc_artwork):
                 word = itow[w]
                 dfidf = 0
                 if word != '<unk>':
-                    dfidf = df_idf(word, artwork_id, doc_artwork, wc_review, wc_artwork)
+                    dfidf = df_idf(word, artwork_id, atod, wtor, wtoa)
                 sent.append(dfidf)
             doc.append(sent)
         doc_df_idf.append(doc)
@@ -181,7 +187,7 @@ def process_df_idf(doc_encode, doc_artwork, itow, wc_review, wc_artwork):
 
 
 # %%
-limit = 5000
+limit = 20000
 n_most_common = None
 
 logger.info('# of reviews: {}'.format(limit))
@@ -192,7 +198,8 @@ wtoi, itow = get_word_dict(wc, n_most_common)
 logger.info('Encoding reviews...')
 doc_encode, doc_artwork = process(generate_records(limit), wtoi)
 logger.info('Calculating DF-IDF...')
-doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, wc_review, wc_artwork)
+atod, wtor, wtoa = prepare_invmap(doc_artwork, wc_review, wc_artwork)
+doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa)
 logger.info('Saving...')
 obj = {
     'doc_label_sents': doc_encode,

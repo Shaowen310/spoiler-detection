@@ -35,7 +35,7 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     filename = 'goodreads_reviews_spoiler.json.gz'
     word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
 
-    def __init__(self, doc_label_sents, itow, max_n_words, max_n_sents):
+    def __init__(self, doc_label_sents, doc_df_idf, itow, max_n_words, max_n_sents):
         super().__init__()
 
         self.max_n_words = max_n_words
@@ -49,6 +49,8 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         self.labels = torch.from_numpy(labels)
         self.doc_len_masks = torch.from_numpy(doc_len_masks)
         self.doc_sent_lens = doc_sent_lens
+
+        self.doc_dfidf = self.paddfidf(doc_df_idf)
 
     def pad(self, doc_label_sents, pad_idx=0):
         docs, labels, doc_lens, doc_sent_lens = [], [], [], []
@@ -75,10 +77,20 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         for idx, doc_len in enumerate(doc_lens):
             doc_len_masks[idx, :doc_len] = 1
         return docs, labels, doc_len_masks, doc_sent_lens
-        
+
+    def paddfidf(self, doc_df_idf):
+        docs = []
+        for doc_df_idf_ in doc_df_idf:
+            doc = np.full((self.max_n_sents, self.max_n_words), 0., dtype=np.float32)
+            for i, sent in enumerate(itertools.islice(doc_df_idf_, self.max_n_sents)):
+                sent_len = min((self.max_n_words, len(sent)))
+                doc[i, :sent_len] = sent[:sent_len]
+            docs.append(doc)
+        docs = np.array(docs)
+        return docs
 
     def __getitem__(self, idx):
-        return self.docs[idx], self.labels[idx], self.doc_len_masks[idx]
+        return self.docs[idx], self.labels[idx], self.doc_len_masks[idx], self.doc_dfidf[idx]
 
     def __len__(self):
         return len(self.docs)

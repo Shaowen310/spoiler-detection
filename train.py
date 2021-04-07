@@ -35,26 +35,29 @@ params['max_doc_len'] = max_doc_len
 with open(data_file, 'rb') as f:
     data = pickle.load(f)
 doc_label_sents = data['doc_label_sents']
+doc_df_idf = data['doc_df_idf']
 itow = data['itow']
 
 
 # %%
 # Split train, dev, test
-def train_dev_test_split(d: Sequence, train_size: float, dev_size: float):
-    n_d = len(d)
-    n_train = math.floor(n_d * train_size)
-    n_dev = math.floor(n_d * dev_size)
-    rand_idx = np.random.choice(n_d, n_d, replace=False)
+def train_dev_test_split_idx(rand_idx, d: Sequence, n_train: int, n_dev: int):
     d_train = [d[idx] for idx in rand_idx[:n_train]]
     d_dev = [d[idx] for idx in rand_idx[n_train:n_train + n_dev]]
     d_test = [d[idx] for idx in rand_idx[n_train + n_dev:]]
     return d_train, d_dev, d_test
 
 
-d_train, d_dev, d_test = train_dev_test_split(doc_label_sents, train_portion, dev_portion)
+n_d = len(doc_label_sents)
+n_train = math.floor(n_d * train_portion)
+n_dev = math.floor(n_d * dev_portion)
+rand_idx = np.random.choice(n_d, n_d, replace=False)
 
-ds_train = GoodreadsReviewsSpoilerDataset(d_train, itow, max_sent_len, max_doc_len)
-ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, itow, max_sent_len, max_doc_len)
+d_train, d_dev, d_test = train_dev_test_split_idx(rand_idx, doc_label_sents, n_train, n_dev)
+d_idf_train, d_idf_dev, d_idf_test = train_dev_test_split_idx(rand_idx, doc_df_idf, n_train, n_dev)
+
+ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, itow, max_sent_len, max_doc_len)
+ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, itow, max_sent_len, max_doc_len)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=True)
 dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
 
@@ -73,6 +76,8 @@ params['emb_size'] = emb_size
 model_id = paramstore.add(model_name, params)
 
 _logger = loggingutil.get_logger(model_id)
+
+_logger.info('Data file: {}'.format(data_file))
 
 model = SpoilerNet(cell_dim=cell_dim, att_dim=att_dim, vocab_size=vocab_size, emb_size=emb_size)
 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
@@ -98,16 +103,17 @@ def train_one_epoch(epoch, model, dataloader, optimizer, criterion, device, log_
     log_loss = 0
     start_time = time.time()
 
-    for batch, (elems, labels, sentmasks) in enumerate(dataloader):
+    for batch, (elems, labels, sentmasks, dfidf) in enumerate(dataloader):
         elems = elems.to(device)
         labels = labels.float().view(-1).to(device)
         sentmasks = sentmasks.view(-1).to(device)
+        dfidf = dfidf.to(device)
 
         optimizer.zero_grad()
 
         word_h0 = model.init_hidden(len(elems)).to(device)
         sent_h0 = model.init_hidden(len(elems)).to(device)
-        preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0)
+        preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, dfidf)
         loss = criterion(preds, labels)
         loss *= sentmasks
         loss = torch.sum(loss) / torch.count_nonzero(sentmasks)
@@ -147,14 +153,15 @@ def evaluate(model, dataloader, criterion, device='cpu'):
     labelss = []
     sentmaskss = []
     with torch.no_grad():
-        for elems, labels, sentmasks in dataloader:
+        for elems, labels, sentmasks, dfidf in dataloader:
             elems = elems.to(device)
             labels = labels.float().view(-1).to(device)
             sentmasks = sentmasks.view(-1).to(device)
+            dfidf = dfidf.to(device)
 
             word_h0 = model.init_hidden(len(elems)).to(device)
             sent_h0 = model.init_hidden(len(elems)).to(device)
-            preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0)
+            preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, dfidf)
 
             loss = criterion(preds, labels)
             loss *= sentmasks
