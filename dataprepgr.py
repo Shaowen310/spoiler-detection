@@ -16,6 +16,8 @@ import gdown
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+import numpy as np
+from sklearn.preprocessing import StandardScaler
 
 import loggingutil
 
@@ -30,6 +32,7 @@ logger = loggingutil.get_logger('dataprepgr')
 # %%
 STOP_WORDS = set(stopwords.words('english'))
 _porter = PorterStemmer()
+_stdscale = StandardScaler()
 # %%
 # Download
 file_dir = os.path.join(root, base_folder)
@@ -168,21 +171,31 @@ def df_idf(word, artwork_id, atod, wtor, wtoa):
 
 
 def process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa, log_every=1000):
-    doc_df_idf = []
+    all_df_idf = []
     for i in range(len(doc_encode)):
         doc_label_sent_encodes = doc_encode[i]
         artwork_id = doc_artwork[i]
-        doc = []
         for lb_s in doc_label_sent_encodes:
-            sent = []
             for w in lb_s[1]:
                 word = itow[w]
                 dfidf = 0
                 if word != '<unk>':
                     dfidf = df_idf(word, artwork_id, atod, wtor, wtoa)
-                sent.append(dfidf)
+                all_df_idf.append(dfidf)
+    all_df_idf = _stdscale.fit_transform(np.array(all_df_idf).reshape(-1,1)).ravel()
+
+    doc_df_idf = []
+    c = 0
+    for doc_label_sent_encodes in doc_encode:
+        doc = []
+        for lb_s in doc_label_sent_encodes:
+            sent=[]
+            for w in lb_s[1]:
+                sent.append(all_df_idf[c])
+                c += 1
             doc.append(sent)
         doc_df_idf.append(doc)
+
     return doc_df_idf
 
 

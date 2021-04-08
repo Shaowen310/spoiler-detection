@@ -7,11 +7,11 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dataprepgr import generate_records
+# from dataprepgr import generate_records
 
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-data_file = os.path.join(data_dir, 'mappings_5000_all.pkl')
+data_file = os.path.join(data_dir, 'mappings_20000_all.pkl')
 
 # %%
 # one_record = list(generate_records(1))
@@ -25,6 +25,7 @@ doc_label_sents = data['doc_label_sents']
 itow = data['itow']
 wc = data['wc']
 wc_artwork = data['wc_artwork']
+doc_df_idf = data['doc_df_idf']
 
 # %%
 # doc len, sent len
