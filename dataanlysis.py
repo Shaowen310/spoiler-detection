@@ -81,7 +81,7 @@ print('percentile for doc len {}: {}'.format(
 
 # %%
 freq = 1
-words = list(filter(lambda t: t[1] <= freq, wc.items()))
+words = list(itertools.islice(filter(lambda t: t[1] <= freq, wc.items()), 100))
 print(words)
 
 # %%

@@ -200,7 +200,7 @@ def process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa, log_every=10
 
 
 # %%
-limit = 20000
+limit = 40000
 n_most_common = None
 
 logger.info('# of reviews: {}'.format(limit))

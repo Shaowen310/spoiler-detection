@@ -42,6 +42,8 @@ class SpoilerNet(nn.Module):
         self.sent_encoder = nn.GRU(2 * cell_dim, cell_dim, bidirectional=True)
         self.out_linear = nn.Linear(2 * cell_dim, 1)
 
+        self.drop = nn.Dropout(dropout_rate)
+
     def init_hidden(self, batch_size):
         return torch.zeros(2, batch_size, self.cell_dim)
 
@@ -67,6 +69,8 @@ class SpoilerNet(nn.Module):
             sentlv_word_encs, word_h0 = self.word_encoder(word_emb_idf, word_h0)
             # (word_seq_len, batch, num_directions * hidden_size)
 
+            sentlv_word_encs = self.drop(sentlv_word_encs)
+
             sentlv_sent_enc = self.word_att(sentlv_word_encs)
             # (batch, num_directions * hidden_size)
 
@@ -77,6 +81,8 @@ class SpoilerNet(nn.Module):
 
         doclv_sent_enc, sent_h0 = self.sent_encoder(sentlv_sent_encs, sent_h0)
         # (sent_seq_len, batch, num_directions * hidden_size)
+
+        doclv_sent_enc = self.drop(doclv_sent_enc)
 
         doclv_sent_enc = doclv_sent_enc.permute(1, 0, 2)
         # (batch, sent_seq_len, num_directions * hidden_size)
