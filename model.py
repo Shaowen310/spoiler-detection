@@ -27,6 +27,7 @@ class SpoilerNet(nn.Module):
                  att_dim,
                  vocab_size,
                  emb_size,
+                 use_idf,
                  dropout_rate=0.5,
                  pretrained_emb=None):
         super().__init__()
@@ -35,9 +36,11 @@ class SpoilerNet(nn.Module):
         self.att_dim = att_dim
         self.vocab_size = vocab_size
         self.emb_size = emb_size
+        self.use_idf = use_idf
 
         self.emb_layer = nn.Embedding(vocab_size, emb_size, 0)
-        self.word_encoder = nn.GRU(emb_size + 1, cell_dim, bidirectional=True)
+        self.sentlv_word_emb_size = emb_size + 1 if use_idf else emb_size
+        self.word_encoder = nn.GRU(self.sentlv_word_emb_size, cell_dim, bidirectional=True)
         self.word_att = WordAttentionLayer(2 * cell_dim, att_dim)
         self.sent_encoder = nn.GRU(2 * cell_dim, cell_dim, bidirectional=True)
         self.out_linear = nn.Linear(2 * cell_dim, 1)
@@ -47,26 +50,29 @@ class SpoilerNet(nn.Module):
     def init_hidden(self, batch_size):
         return torch.zeros(2, batch_size, self.cell_dim)
 
-    def forward(self, x, word_h0, sent_h0, x_df_idf):
+    def forward(self, x, word_h0, sent_h0, x_df_idf=None):
         '''
         x size: (batch, sent_seq_len, word_seq_len)
         '''
         x = x.permute(1, 0, 2)
         # (sent_seq_len, batch, word_seq_len)
-        x_df_idf = x_df_idf.permute(1, 0, 2)
+        if self.use_idf:
+            x_df_idf = x_df_idf.permute(1, 0, 2)
 
         sentlv_sent_enc_list = []
         for i in range(len(x)):
             sent = x[i]
-            sent_df_idf = x_df_idf[i]
-
             sent = sent.permute(1, 0)
             # (word_seq_len, batch)
-            sent_df_idf = sent_df_idf.permute(1, 0).unsqueeze(2)
+
+            if self.use_idf:
+                sent_df_idf = x_df_idf[i]
+                sent_df_idf = sent_df_idf.permute(1, 0).unsqueeze(2)
 
             word_emb = self.emb_layer(sent)
-            word_emb_idf = torch.cat((word_emb, sent_df_idf), 2)
-            sentlv_word_encs, word_h0 = self.word_encoder(word_emb_idf, word_h0)
+            if self.use_idf:
+                word_emb = torch.cat((word_emb, sent_df_idf), 2)
+            sentlv_word_encs, word_h0 = self.word_encoder(word_emb, word_h0)
             # (word_seq_len, batch, num_directions * hidden_size)
 
             sentlv_word_encs = self.drop(sentlv_word_encs)

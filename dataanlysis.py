@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-data_file = os.path.join(data_dir, 'mappings_20000_all.pkl')
+data_file = os.path.join(data_dir, 'mappings_10000_all_ge5.pkl')
 
 # %%
 # one_record = list(generate_records(1))
@@ -25,7 +25,20 @@ doc_label_sents = data['doc_label_sents']
 itow = data['itow']
 wc = data['wc']
 wc_artwork = data['wc_artwork']
+doc_artwork = data['doc_artwork']
 doc_df_idf = data['doc_df_idf']
+
+
+def inv_doc_sent_word(doc_sent_word):
+    inv = []
+    for docid, doc in enumerate(doc_sent_word):
+        for sentid, sent in enumerate(doc):
+            for wid, w in enumerate(sent):
+                inv.append((w, (docid, sentid, wid)))
+    return inv
+
+
+inv_doc_idf_idf = inv_doc_sent_word(doc_df_idf)
 
 # %%
 # doc len, sent len
@@ -85,9 +98,16 @@ words = list(itertools.islice(filter(lambda t: t[1] <= freq, wc.items()), 100))
 print(words)
 
 # %%
-# tf-idf
-# doc_label_sent_encodes_gen, word_dict = ds.encode(10, 10)
-# doc_label_sents = list(doc_label_sent_encodes_gen)
-# docs, labels, doc_lens = ds.pad(doc_label_sents)
+# df-idf
+# Which word has highest df-idf
+dfidftop100 = sorted(inv_doc_idf_idf, key=lambda e: e[0], reverse=True)[:1000]
+
+
+def word_of_idx(doc_label_sents, idx, itow):
+    return itow[doc_label_sents[idx[0]][idx[1]][1][idx[2]]]
+
+
+top100w = set(
+    map(lambda i: word_of_idx(doc_label_sents, i, itow), map(lambda e: e[1], dfidftop100)))
 
 # %%

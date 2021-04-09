@@ -11,6 +11,7 @@ import pickle
 import re
 import string
 import math
+from typing import Iterable
 
 import gdown
 from nltk.tokenize import word_tokenize
@@ -101,9 +102,12 @@ def get_label_sent_words(label_sents):
     return [(lb_s[0], get_sent_words(lb_s[1])) for lb_s in label_sents]
 
 
-def get_word_dict(wc, n_most_common):
+def get_word_dict(wc, n_most_common, freq=1):
     itow = ['<pad>', '<unk>']
-    itow.extend([word for (word, _) in wc.most_common(n_most_common)])
+    wcs = wc.most_common(n_most_common)
+    wcs = filter(lambda wc: wc[1] >= freq, wcs)
+    words = map(lambda wc: wc[0], wcs)
+    itow.extend(words)
     wtoi = {w: i for i, w in enumerate(itow)}
     logger.info("Vocabulary size = {}".format(len(wtoi)))
     return wtoi, itow
@@ -116,22 +120,22 @@ def get_doc_label_sent_encodes(label_sents, word2idx):
 
 # %%
 def word_count(records):
-    wc_review = []
+    wc_doc = []
     wc_artwork = collections.defaultdict(lambda: collections.Counter())
     wc = collections.Counter()
     for record in records:
         artwork_id = record['book_id']
-        wc_review_ = collections.Counter()
+        wc_doc_ = collections.Counter()
         for (_, words) in get_label_sent_words(record['review_sentences']):
-            wc_review_.update(words)
-        wc_review.append(wc_review_)
-        wc_artwork[artwork_id].update(wc_review_)
-        wc.update(wc_review_)
+            wc_doc_.update(words)
+        wc_doc.append(wc_doc_)
+        wc_artwork[artwork_id].update(wc_doc_)
+        wc.update(wc_doc_)
 
     logger.info('# of books: {}'.format(len(wc_artwork)))
 
     # vocab
-    return wc, wc_artwork, wc_review
+    return wc, wc_artwork, wc_doc
 
 
 def process(records, word2idx):
@@ -148,20 +152,23 @@ def prepare_invmap(doc_artwork, wc_review, wc_artwork):
     atod = collections.defaultdict(lambda: [])
     for d, a in enumerate(doc_artwork):
         atod[a].append(d)
-    wtor = collections.defaultdict(lambda: [])
+    wtod = collections.defaultdict(lambda: [])
     for r, wc in enumerate(wc_review):
         for w in wc.keys():
-            wtor[w].append(r)
+            wtod[w].append(r)
     wtoa = collections.defaultdict(lambda: [])
     for a, wc in wc_artwork.items():
         for w in wc.keys():
             wtoa[w].append(a)
-    return dict(atod), dict(wtor), dict(wtoa)
+    return dict(atod), dict(wtod), dict(wtoa)
 
 
-def df_idf(word, artwork_id, atod, wtor, wtoa):
-    d_i = len(atod[artwork_id])
-    d_wi = len(wtor[word])
+def df_idf(word, artwork_id, atod, wtod, wtoa):
+    d_i_docs = atod[artwork_id]
+    d_i = len(d_i_docs)
+    d_w_docs = wtod[word]
+    d_wi_docs = set.intersection(set(d_i_docs), set(d_w_docs))
+    d_wi = len(d_wi_docs)
     df = d_wi / d_i
     e = 1
     l_w = len(wtoa[word])
@@ -170,28 +177,32 @@ def df_idf(word, artwork_id, atod, wtor, wtoa):
     return df * iif
 
 
-def process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa, log_every=1000):
+def process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa, log_every=100000):
     all_df_idf = []
+    c = 0
     for i in range(len(doc_encode)):
         doc_label_sent_encodes = doc_encode[i]
         artwork_id = doc_artwork[i]
         for lb_s in doc_label_sent_encodes:
             for w in lb_s[1]:
                 word = itow[w]
-                dfidf = 0
+                dfidf = 1.
                 if word != '<unk>':
-                    dfidf = df_idf(word, artwork_id, atod, wtor, wtoa)
+                    dfidf = df_idf(word, artwork_id, atod, wtod, wtoa)
                 all_df_idf.append(dfidf)
-    all_df_idf = _stdscale.fit_transform(np.array(all_df_idf).reshape(-1,1)).ravel()
+                c += 1
+                if log_every and not c % log_every:
+                    print('Processed {} words'.format(c / log_every))
+    all_df_idf = _stdscale.fit_transform(np.array(all_df_idf).reshape(-1, 1)).ravel()
 
     doc_df_idf = []
     c = 0
     for doc_label_sent_encodes in doc_encode:
         doc = []
         for lb_s in doc_label_sent_encodes:
-            sent=[]
+            sent = []
             for w in lb_s[1]:
-                sent.append(all_df_idf[c])
+                sent.append(all_df_idf[c].item())
                 c += 1
             doc.append(sent)
         doc_df_idf.append(doc)
@@ -200,19 +211,20 @@ def process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa, log_every=10
 
 
 # %%
-limit = 100000
+limit = 10000
 n_most_common = None
+freq_ge = 5
 
 logger.info('# of reviews: {}'.format(limit))
 logger.info('Getting word counts...')
-wc, wc_artwork, wc_review = word_count(generate_records(limit))
+wc, wc_artwork, wc_doc = word_count(generate_records(limit))
 logger.info('Building dictionaries...')
-wtoi, itow = get_word_dict(wc, n_most_common)
+wtoi, itow = get_word_dict(wc, n_most_common, freq_ge)
 logger.info('Encoding reviews...')
 doc_encode, doc_artwork = process(generate_records(limit), wtoi)
 logger.info('Calculating DF-IDF...')
-atod, wtor, wtoa = prepare_invmap(doc_artwork, wc_review, wc_artwork)
-doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtor, wtoa)
+atod, wtod, wtoa = prepare_invmap(doc_artwork, wc_doc, wc_artwork)
+doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa)
 logger.info('Saving...')
 obj = {
     'doc_label_sents': doc_encode,
@@ -222,8 +234,9 @@ obj = {
     'doc_artwork': doc_artwork,
     'doc_df_idf': doc_df_idf
 }
-filename = 'mappings_{}_{}'.format('all' if limit is None else str(limit),
-                                   'all' if n_most_common is None else str(n_most_common))
+filename = 'mappings_{}_{}_ge{}'.format('all' if limit is None else str(limit),
+                                        'all' if n_most_common is None else str(n_most_common),
+                                        str(freq_ge))
 with open(os.path.join(file_dir, filename + '.pkl'), 'wb') as f:
     pickle.dump(obj, f)
 

@@ -22,11 +22,11 @@ params = {}
 # ## Data
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-data_file = os.path.join(data_dir, 'mappings_100000_all.pkl')
+data_file = os.path.join(data_dir, 'mappings_10000_all_ge5.pkl')
 max_sent_len = 25
 max_doc_len = 30
 batch_size = 32
-train_portion, dev_portion = 0.5, 0.25
+train_portion, dev_portion = 0.8, 0.1
 
 params['max_sent_len'] = max_sent_len
 params['max_doc_len'] = max_doc_len
@@ -63,15 +63,17 @@ dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
 
 # %%
 model_name = 'spoilernet'
-cell_dim = 64
+cell_dim = 128
 att_dim = 32
 vocab_size = len(itow)
-emb_size = 50
+emb_size = 200
+use_idf = True
 
 params['cell_dim'] = cell_dim
 params['att_dim'] = att_dim
 params['vocab_size'] = vocab_size
 params['emb_size'] = emb_size
+params['use_idf'] = use_idf
 
 model_id = paramstore.add(model_name, params)
 
@@ -79,7 +81,11 @@ _logger = loggingutil.get_logger(model_id)
 
 _logger.info('Data file: {}'.format(data_file))
 
-model = SpoilerNet(cell_dim=cell_dim, att_dim=att_dim, vocab_size=vocab_size, emb_size=emb_size)
+model = SpoilerNet(cell_dim=cell_dim,
+                   att_dim=att_dim,
+                   vocab_size=vocab_size,
+                   emb_size=emb_size,
+                   use_idf=use_idf)
 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
 
 device = torch.device('cuda:0')
@@ -93,7 +99,14 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 # %% [markdown]
 # ## Training
 # %%
-def train_one_epoch(epoch, model, dataloader, optimizer, criterion, device, log_interval=1000):
+def train_one_epoch(epoch,
+                    model,
+                    dataloader,
+                    optimizer,
+                    criterion,
+                    params,
+                    device,
+                    log_interval=1000):
     model.to(device)
     criterion.to(device)
 
@@ -107,13 +120,17 @@ def train_one_epoch(epoch, model, dataloader, optimizer, criterion, device, log_
         elems = elems.to(device)
         labels = labels.float().view(-1).to(device)
         sentmasks = sentmasks.view(-1).to(device)
-        dfidf = dfidf.to(device)
+        if params['use_idf']:
+            dfidf = dfidf.to(device)
 
         optimizer.zero_grad()
 
         word_h0 = model.init_hidden(len(elems)).to(device)
         sent_h0 = model.init_hidden(len(elems)).to(device)
-        preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, dfidf)
+        if params['use_idf']:
+            preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, dfidf)
+        else:
+            preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0)
         loss = criterion(preds, labels)
         loss *= sentmasks
         loss = torch.sum(loss) / torch.count_nonzero(sentmasks)
@@ -142,7 +159,7 @@ def f1_score(y_true, y_pred, threshold=0.5):
     return metrics.f1_score(y_true, y_pred_lb)
 
 
-def evaluate(model, dataloader, criterion, device='cpu'):
+def evaluate(model, dataloader, criterion, params, device='cpu'):
     model.to(device)
     criterion.to(device)
 
@@ -157,11 +174,15 @@ def evaluate(model, dataloader, criterion, device='cpu'):
             elems = elems.to(device)
             labels = labels.float().view(-1).to(device)
             sentmasks = sentmasks.view(-1).to(device)
-            dfidf = dfidf.to(device)
+            if params['use_idf']:
+                dfidf = dfidf.to(device)
 
             word_h0 = model.init_hidden(len(elems)).to(device)
             sent_h0 = model.init_hidden(len(elems)).to(device)
-            preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, dfidf)
+            if params['use_idf']:
+                preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, dfidf)
+            else:
+                preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0)
 
             loss = criterion(preds, labels)
             loss *= sentmasks
@@ -195,9 +216,9 @@ for epoch in range(n_epochs):
         break
     epoch_loss = 0
 
-    epoch_loss = train_one_epoch(epoch, model, dl_train, optimizer, criterion, device)
+    epoch_loss = train_one_epoch(epoch, model, dl_train, optimizer, criterion, params, device)
 
-    dev_loss, dev_f1, dev_roc_auc = evaluate(model, dl_dev, criterion, device)
+    dev_loss, dev_f1, dev_roc_auc = evaluate(model, dl_dev, criterion, params, device)
 
     _logger.info(
         '| epoch {} | epoch_loss {:.6f} | dev_loss {:.6f} | dev_f1 {:.3f} | dev_roc_auc {:.3f}'.
