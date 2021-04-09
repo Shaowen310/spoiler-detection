@@ -26,7 +26,7 @@ data_file = os.path.join(data_dir, 'mappings_10000_all_ge5.pkl')
 max_sent_len = 25
 max_doc_len = 30
 batch_size = 32
-train_portion, dev_portion = 0.8, 0.1
+train_portion, dev_portion = 0.7, 0.1
 
 params['max_sent_len'] = max_sent_len
 params['max_doc_len'] = max_doc_len
