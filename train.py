@@ -22,7 +22,7 @@ params = {}
 # ## Data
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-data_file = os.path.join(data_dir, 'mappings_40000_all.pkl')
+data_file = os.path.join(data_dir, 'mappings_100000_all.pkl')
 max_sent_len = 25
 max_doc_len = 30
 batch_size = 32
