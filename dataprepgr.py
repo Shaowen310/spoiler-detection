@@ -13,6 +13,10 @@ import string
 import math
 from typing import Iterable
 
+import nltk
+# nltk.download('stopwords')
+# nltk.download('punkt')
+
 import gdown
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
@@ -44,12 +48,23 @@ if not os.path.exists(file_path):
     gdown.download(URL, output=file_path)
 
 
+# keywords
+keyword_path = "data_/book_id_keywords.json"
+keywords = json.load(open(keyword_path, "r"))
+
+
 # Load
 def generate_records(limit=None, log_every=100000):
     count = 0
     with gzip.open(file_path) as fin:
         for l in itertools.islice(fin, limit):
             d = json.loads(l)
+
+            # process book abstract
+            book_id = d['book_id']
+            if book_id not in keywords:
+                continue
+
             count += 1
             if not (count % log_every):
                 logger.debug('Processed {} records'.format(count))
@@ -139,13 +154,26 @@ def word_count(records):
 
 
 def process(records, word2idx):
-    doc_artwork, doc_encode = [], []
+    doc_artwork, doc_encode, doc_key_encode = [], [], []
     for record in records:
+
+        key_encode = []
+        book_id = record['book_id']
+        doc_keys = keywords[book_id]
+        for phase in doc_keys:
+            words = word_tokenize(phase)
+            for word in words:
+                if word in word2idx:
+                    key_encode.append(word2idx[word])
+        if not key_encode:
+            key_encode = [word2idx['<unk>']]
+        doc_key_encode.append(key_encode)
+
         doc_artwork.append(record['book_id'])
         doc_label_sent_encodes = get_doc_label_sent_encodes(record['review_sentences'], word2idx)
         doc_encode.append(doc_label_sent_encodes)
 
-    return doc_encode, doc_artwork
+    return doc_encode, doc_artwork, doc_key_encode
 
 
 def prepare_invmap(doc_artwork, wc_review, wc_artwork):
@@ -209,6 +237,17 @@ def process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa, log_every=10
 
     return doc_df_idf
 
+# char-process
+def get_char_dict(wtoi):
+    itoc = set()
+    for word in wtoi:
+        word = set(word)
+        itoc = itoc | word 
+
+    itoc = list(itoc)
+    ctoi = {c: i for i, c in enumerate(itoc)}
+    logger.info("Char Vocabulary size = {}".format(len(ctoi)))
+    return ctoi, itoc
 
 # %%
 limit = 10000
@@ -220,8 +259,11 @@ logger.info('Getting word counts...')
 wc, wc_artwork, wc_doc = word_count(generate_records(limit))
 logger.info('Building dictionaries...')
 wtoi, itow = get_word_dict(wc, n_most_common, freq_ge)
+logger.info('Building char-level dictionaries...')
+ctoi, itoc = get_char_dict(wtoi)
+
 logger.info('Encoding reviews...')
-doc_encode, doc_artwork = process(generate_records(limit), wtoi)
+doc_encode, doc_artwork, doc_key_encode = process(generate_records(limit), wtoi)
 logger.info('Calculating DF-IDF...')
 atod, wtod, wtoa = prepare_invmap(doc_artwork, wc_doc, wc_artwork)
 doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa)
@@ -232,7 +274,9 @@ obj = {
     'wc': dict(wc),
     'wc_artwork': dict(wc_artwork),
     'doc_artwork': doc_artwork,
-    'doc_df_idf': doc_df_idf
+    'doc_df_idf': doc_df_idf,
+    'ctoi': ctoi,
+    'doc_key_encode': doc_key_encode
 }
 filename = 'mappings_{}_{}_ge{}'.format('all' if limit is None else str(limit),
                                         'all' if n_most_common is None else str(n_most_common),
