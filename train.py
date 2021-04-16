@@ -58,9 +58,10 @@ d_idf_train, d_idf_dev, d_idf_test = train_dev_test_split_idx(rand_idx, doc_df_i
 
 ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, itow, max_sent_len, max_doc_len)
 ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, itow, max_sent_len, max_doc_len)
+ds_test = GoodreadsReviewsSpoilerDataset(d_test, d_idf_test, itow, max_sent_len, max_doc_len)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=True)
 dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
-
+dl_test = torch.utils.data.DataLoader(ds_test, batch_size=batch_size)
 # %%
 model_name = 'spoilernet'
 cell_dim = 128
@@ -230,5 +231,14 @@ for epoch in range(n_epochs):
         no_drop_epochs = 0
     else:
         no_drop_epochs += 1
+
+# %%
+# test
+model.load_state_dict(torch.load(os.path.join('model_', model_id + '.pt')))
+
+test_loss, test_f1, test_roc_auc = evaluate(model, dl_test, criterion, params, device)
+
+_logger.info('| test_loss {:.6f} | test_f1 {:.3f} | test_roc_auc {:.3f}'.format(
+    test_loss, test_f1, test_roc_auc))
 
 # %%

@@ -211,7 +211,7 @@ def process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa, log_every=10
 
 
 # %%
-limit = 10000
+limit = 100000
 n_most_common = None
 freq_ge = 5
 
