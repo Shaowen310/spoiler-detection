@@ -22,7 +22,7 @@ params = {}
 # ## Data
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
-data_file = os.path.join(data_dir, 'mappings_10000_all_ge5.pkl')
+data_file = os.path.join(data_dir, 'mappings_100000_all_ge5.pkl')
 max_sent_len = 25
 max_doc_len = 30
 batch_size = 32
@@ -225,8 +225,8 @@ for epoch in range(n_epochs):
         '| epoch {} | epoch_loss {:.6f} | dev_loss {:.6f} | dev_f1 {:.3f} | dev_roc_auc {:.3f}'.
         format(epoch, epoch_loss, dev_loss, dev_f1, dev_roc_auc))
 
-    if dev_loss < dev_loss_lowest:
-        dev_loss_lowest = dev_loss
+    if dev_roc_auc < dev_loss_lowest:
+        dev_loss_lowest = dev_roc_auc
         torch.save(model.state_dict(), os.path.join('model_', model_id + '.pt'))
         no_drop_epochs = 0
     else:
