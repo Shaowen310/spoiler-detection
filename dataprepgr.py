@@ -129,7 +129,7 @@ def get_word_dict(wc, n_most_common, freq=1):
 
 
 def get_doc_label_sent_encodes(label_sents, word2idx):
-    return [(lb_sw[0], [word2idx[w if w in word2idx else '<unk>'] for w in lb_sw[1]])
+    return [(lb_sw[0], [word2idx[w if w in word2idx else '<unk>'] for w in lb_sw[1]], lb_sw[1])
             for lb_sw in get_label_sent_words(label_sents)]
 
 
@@ -153,27 +153,46 @@ def word_count(records):
     return wc, wc_artwork, wc_doc
 
 
-def process(records, word2idx):
-    doc_artwork, doc_encode, doc_key_encode = [], [], []
+def process(records, word2idx, ctoi):
+    doc_artwork, doc_encode, doc_key_encode, doc_char_encode = [], [], [], []
     for record in records:
 
         key_encode = []
         book_id = record['book_id']
         doc_keys = keywords[book_id]
+        char_encode = []
+
         for phase in doc_keys:
             words = word_tokenize(phase)
             for word in words:
                 if word in word2idx:
                     key_encode.append(word2idx[word])
+
         if not key_encode:
             key_encode = [word2idx['<unk>']]
         doc_key_encode.append(key_encode)
 
         doc_artwork.append(record['book_id'])
-        doc_label_sent_encodes = get_doc_label_sent_encodes(record['review_sentences'], word2idx)
-        doc_encode.append(doc_label_sent_encodes)
+        encodes = get_doc_label_sent_encodes(record['review_sentences'], word2idx)
+        
+        doc_label_sent_encodes = []
+        doc_char_sent_encodes = []
+        for encode in encodes:
+            doc_label_sent_encodes.append(encode[:2])
 
-    return doc_encode, doc_artwork, doc_key_encode
+            words = encode[2]
+            char_encode = []
+            for word in words:
+                chars = []
+                for char in word:
+                    chars.append(ctoi[char])
+                char_encode.append(chars)
+            doc_char_sent_encodes.append(char_encode)
+            
+        doc_encode.append(doc_label_sent_encodes)
+        doc_char_encode.append(doc_char_sent_encodes)
+
+    return doc_encode, doc_artwork, doc_key_encode, doc_char_encode
 
 
 def prepare_invmap(doc_artwork, wc_review, wc_artwork):
@@ -238,9 +257,10 @@ def process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa, log_every=10
     return doc_df_idf
 
 # char-process
-def get_char_dict(wtoi):
+def get_char_dict(wc):
     itoc = set()
-    for word in wtoi:
+    for word in wc:
+        word = word[0]
         word = set(word)
         itoc = itoc | word 
 
@@ -260,10 +280,10 @@ wc, wc_artwork, wc_doc = word_count(generate_records(limit))
 logger.info('Building dictionaries...')
 wtoi, itow = get_word_dict(wc, n_most_common, freq_ge)
 logger.info('Building char-level dictionaries...')
-ctoi, itoc = get_char_dict(wtoi)
+ctoi, itoc = get_char_dict(wc)
 
 logger.info('Encoding reviews...')
-doc_encode, doc_artwork, doc_key_encode = process(generate_records(limit), wtoi)
+doc_encode, doc_artwork, doc_key_encode, doc_char_encode = process(generate_records(limit), wtoi, ctoi)
 logger.info('Calculating DF-IDF...')
 atod, wtod, wtoa = prepare_invmap(doc_artwork, wc_doc, wc_artwork)
 doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa)
@@ -276,7 +296,8 @@ obj = {
     'doc_artwork': doc_artwork,
     'doc_df_idf': doc_df_idf,
     'ctoi': ctoi,
-    'doc_key_encode': doc_key_encode
+    'doc_key_encode': doc_key_encode,
+    "doc_char_encode" : doc_char_encode
 }
 filename = 'mappings_{}_{}_ge{}'.format('all' if limit is None else str(limit),
                                         'all' if n_most_common is None else str(n_most_common),

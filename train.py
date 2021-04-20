@@ -39,6 +39,7 @@ doc_df_idf = data['doc_df_idf']
 itow = data['itow']
 ctoi = data["ctoi"]
 doc_key_encode = data['doc_key_encode']
+doc_char_encode = data['doc_char_encode']
 
 # %%
 # Split train, dev, test
@@ -48,6 +49,7 @@ def train_dev_test_split_idx(rand_idx, d: Sequence, n_train: int, n_dev: int):
     d_test = [d[idx] for idx in rand_idx[n_train + n_dev:]]
     return d_train, d_dev, d_test
 
+np.random.seed(0)
 
 n_d = len(doc_label_sents)
 n_train = math.floor(n_d * train_portion)
@@ -57,12 +59,14 @@ rand_idx = np.random.choice(n_d, n_d, replace=False)
 d_train, d_dev, d_test = train_dev_test_split_idx(rand_idx, doc_label_sents, n_train, n_dev)
 d_idf_train, d_idf_dev, d_idf_test = train_dev_test_split_idx(rand_idx, doc_df_idf, n_train, n_dev)
 d_key_train, d_key_dev, d_key_test = train_dev_test_split_idx(rand_idx, doc_key_encode, n_train, n_dev)
+d_char_train, d_char_dev, d_char_test = train_dev_test_split_idx(rand_idx, doc_char_encode, n_train, n_dev)
 
-ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, d_key_train, itow, max_sent_len, max_doc_len, ctoi)
-ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, d_key_dev, itow, max_sent_len, max_doc_len, ctoi)
+ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, d_key_train, itow, max_sent_len, max_doc_len, ctoi, d_char_train)
+ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, d_key_dev, itow, max_sent_len, max_doc_len, ctoi, d_char_dev)
+ds_test = GoodreadsReviewsSpoilerDataset(d_test, d_idf_test, d_key_test, itow, max_sent_len, max_doc_len, ctoi, d_char_test)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=True)
 dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
-
+dl_test = torch.utils.data.DataLoader(ds_test, batch_size=batch_size)
 # %%
 model_name = 'spoilernet'
 cell_dim = 128
@@ -104,7 +108,7 @@ model = SpoilerNet(cell_dim=cell_dim,
                    char_vocab_size=char_vocab_size)
 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 model.to(device)
 criterion.to(device)
 
@@ -241,8 +245,8 @@ def evaluate(model, dataloader, criterion, params, device='cpu'):
 
 
 # %%
-dev_loss_lowest = 1000
-patience = 10
+dev_roc_highest = 0
+patience = 3
 no_drop_epochs = 0
 n_epochs = 50
 for epoch in range(n_epochs):
@@ -258,11 +262,21 @@ for epoch in range(n_epochs):
         '| epoch {} | epoch_loss {:.6f} | dev_loss {:.6f} | dev_f1 {:.3f} | dev_roc_auc {:.3f}'.
         format(epoch, epoch_loss, dev_loss, dev_f1, dev_roc_auc))
 
-    if dev_loss < dev_loss_lowest:
-        dev_loss_lowest = dev_loss
+    if dev_roc_auc > dev_roc_highest:
+        _logger.info("Saving model {}:{}".format(model_id, epoch))
+        dev_roc_highest = dev_roc_auc
         torch.save(model.state_dict(), os.path.join('model_', model_id + '.pt'))
         no_drop_epochs = 0
     else:
         no_drop_epochs += 1
+
+# %%
+# test
+model.load_state_dict(torch.load(os.path.join('model_', model_id + '.pt')))
+
+test_loss, test_f1, test_roc_auc = evaluate(model, dl_test, criterion, params, device)
+
+_logger.info('| test_loss {:.6f} | test_f1 {:.3f} | test_roc_auc {:.3f}'.format(
+    test_loss, test_f1, test_roc_auc))
 
 # %%
