@@ -48,6 +48,7 @@ def train_dev_test_split_idx(rand_idx, d: Sequence, n_train: int, n_dev: int):
     d_test = [d[idx] for idx in rand_idx[n_train + n_dev:]]
     return d_train, d_dev, d_test
 
+np.random.seed(0)
 
 n_d = len(doc_label_sents)
 n_train = math.floor(n_d * train_portion)
@@ -242,8 +243,8 @@ def evaluate(model, dataloader, criterion, params, device='cpu'):
 
 
 # %%
-dev_loss_lowest = 1000
-patience = 10
+dev_roc_highest = 0
+patience = 3
 no_drop_epochs = 0
 n_epochs = 50
 for epoch in range(n_epochs):
@@ -259,8 +260,9 @@ for epoch in range(n_epochs):
         '| epoch {} | epoch_loss {:.6f} | dev_loss {:.6f} | dev_f1 {:.3f} | dev_roc_auc {:.3f}'.
         format(epoch, epoch_loss, dev_loss, dev_f1, dev_roc_auc))
 
-    if dev_roc_auc < dev_loss_lowest:
-        dev_loss_lowest = dev_roc_auc
+    if dev_roc_auc > dev_roc_highest:
+        _logger.info("Saving model {}:{}".format(model_id, epoch))
+        dev_roc_highest = dev_roc_auc
         torch.save(model.state_dict(), os.path.join('model_', model_id + '.pt'))
         no_drop_epochs = 0
     else:
