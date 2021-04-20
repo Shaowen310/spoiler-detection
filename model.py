@@ -76,9 +76,9 @@ class SpoilerNet(nn.Module):
         self.emb_layer = nn.Embedding(vocab_size, emb_size, 0)
         # self.sentlv_word_emb_size = emb_size + 1 if use_idf else emb_size
         if use_idf and use_char:
-            self.sentlv_word_emb_size = emb_size + 2 * char_cell_dim + 1
+            self.sentlv_word_emb_size = emb_size + char_emb_size + 1
         elif use_char:
-            self.sentlv_word_emb_size = emb_size + 2 * char_cell_dim
+            self.sentlv_word_emb_size = emb_size + char_emb_size
         elif use_idf:
             self.sentlv_word_emb_size = emb_size + 1
         else:

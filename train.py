@@ -40,6 +40,7 @@ itow = data['itow']
 ctoi = data["ctoi"]
 doc_key_encode = data['doc_key_encode']
 
+
 # %%
 # Split train, dev, test
 def train_dev_test_split_idx(rand_idx, d: Sequence, n_train: int, n_dev: int):
@@ -47,6 +48,7 @@ def train_dev_test_split_idx(rand_idx, d: Sequence, n_train: int, n_dev: int):
     d_dev = [d[idx] for idx in rand_idx[n_train:n_train + n_dev]]
     d_test = [d[idx] for idx in rand_idx[n_train + n_dev:]]
     return d_train, d_dev, d_test
+
 
 np.random.seed(0)
 
@@ -57,11 +59,15 @@ rand_idx = np.random.choice(n_d, n_d, replace=False)
 
 d_train, d_dev, d_test = train_dev_test_split_idx(rand_idx, doc_label_sents, n_train, n_dev)
 d_idf_train, d_idf_dev, d_idf_test = train_dev_test_split_idx(rand_idx, doc_df_idf, n_train, n_dev)
-d_key_train, d_key_dev, d_key_test = train_dev_test_split_idx(rand_idx, doc_key_encode, n_train, n_dev)
+d_key_train, d_key_dev, d_key_test = train_dev_test_split_idx(rand_idx, doc_key_encode, n_train,
+                                                              n_dev)
 
-ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, d_key_train, itow, max_sent_len, max_doc_len, ctoi)
-ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, d_key_dev, itow, max_sent_len, max_doc_len, ctoi)
-ds_test = GoodreadsReviewsSpoilerDataset(d_test, d_idf_test, d_key_test, itow, max_sent_len, max_doc_len, ctoi)
+ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, d_key_train, itow, max_sent_len,
+                                          max_doc_len, ctoi)
+ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, d_key_dev, itow, max_sent_len,
+                                        max_doc_len, ctoi)
+ds_test = GoodreadsReviewsSpoilerDataset(d_test, d_idf_test, d_key_test, itow, max_sent_len,
+                                         max_doc_len, ctoi)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=True)
 dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
 dl_test = torch.utils.data.DataLoader(ds_test, batch_size=batch_size)
@@ -106,7 +112,7 @@ model = SpoilerNet(cell_dim=cell_dim,
                    char_vocab_size=char_vocab_size)
 criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1')
 model.to(device)
 criterion.to(device)
 
@@ -151,7 +157,12 @@ def train_one_epoch(epoch,
         sent_h0 = model.init_hidden(len(elems)).to(device)
 
         if params['use_idf'] and params['use_char']:
-            preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, x_df_idf=dfidf, chars=chars, doc_ab=doc_ab) 
+            preds, word_h0, sent_h0 = model(elems,
+                                            word_h0,
+                                            sent_h0,
+                                            x_df_idf=dfidf,
+                                            chars=chars,
+                                            doc_ab=doc_ab)
         elif params['use_char']:
             preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, chars=chars, doc_ab=doc_ab)
         elif params['use_idf']:
@@ -212,11 +223,20 @@ def evaluate(model, dataloader, criterion, params, device='cpu'):
             sent_h0 = model.init_hidden(len(elems)).to(device)
 
             if params['use_idf'] and params['use_char']:
-                preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, x_df_idf=dfidf, chars=chars, doc_ab=doc_ab)
+                preds, word_h0, sent_h0 = model(elems,
+                                                word_h0,
+                                                sent_h0,
+                                                x_df_idf=dfidf,
+                                                chars=chars,
+                                                doc_ab=doc_ab)
             elif params['use_char']:
                 preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, chars=chars, doc_ab=doc_ab)
             elif params['use_idf']:
-                preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, x_df_idf=dfidf, doc_ab=doc_ab)
+                preds, word_h0, sent_h0 = model(elems,
+                                                word_h0,
+                                                sent_h0,
+                                                x_df_idf=dfidf,
+                                                doc_ab=doc_ab)
             else:
                 preds, word_h0, sent_h0 = model(elems, word_h0, sent_h0, doc_ab=doc_ab)
 
@@ -239,7 +259,7 @@ def evaluate(model, dataloader, criterion, params, device='cpu'):
         f1 = f1_score(labels, preds, 0.05)
         roc_auc = metrics.roc_auc_score(labels, preds)
 
-    return epoch_loss / len(dataloader), f1, roc_auc
+    return labels, preds, epoch_loss / len(dataloader), f1, roc_auc
 
 
 # %%
@@ -254,7 +274,7 @@ for epoch in range(n_epochs):
 
     epoch_loss = train_one_epoch(epoch, model, dl_train, optimizer, criterion, params, device)
 
-    dev_loss, dev_f1, dev_roc_auc = evaluate(model, dl_dev, criterion, params, device)
+    _, _, dev_loss, dev_f1, dev_roc_auc = evaluate(model, dl_dev, criterion, params, device)
 
     _logger.info(
         '| epoch {} | epoch_loss {:.6f} | dev_loss {:.6f} | dev_f1 {:.3f} | dev_roc_auc {:.3f}'.
@@ -270,11 +290,27 @@ for epoch in range(n_epochs):
 
 # %%
 # test
+# model_id='spoilernet_5b926d6e'
+
 model.load_state_dict(torch.load(os.path.join('model_', model_id + '.pt')))
 
-test_loss, test_f1, test_roc_auc = evaluate(model, dl_test, criterion, params, device)
+dev_label, dev_pred, _, _, _ = evaluate(model, dl_dev, criterion, params, device)
+
+ths = np.arange(0.01, 0.51, 0.01)
+dev_f1s = list(map(lambda th: f1_score(dev_label, dev_pred, th), ths))
+dev_f1s = np.array(dev_f1s)
+max_f1_idx = np.argmax(dev_f1s)
+
+test_label, test_pred, test_loss, test_f1, test_roc_auc = evaluate(model, dl_test, criterion,
+                                                                   params, device)
 
 _logger.info('| test_loss {:.6f} | test_f1 {:.3f} | test_roc_auc {:.3f}'.format(
     test_loss, test_f1, test_roc_auc))
+
+test_f1s = list(map(lambda th: f1_score(test_label, test_pred, th), ths))
+test_f1s = np.array(test_f1s)
+
+_logger.info('| best_th {:.2f} | best_dev_f1 {:.3f} | best_test_f1 {:.3f} |'.format(
+    ths[max_f1_idx], dev_f1s[max_f1_idx], test_f1s[max_f1_idx]))
 
 # %%
