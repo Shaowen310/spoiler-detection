@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-device = torch.device('cuda:0')
 
 class WordAttentionLayer(nn.Module):
     def __init__(self, in_dim, att_dim):
@@ -20,6 +19,7 @@ class WordAttentionLayer(nn.Module):
         v_mu = torch.sum(mu * self.v, dim=2)
         att_w = F.softmax(v_mu, dim=0)
         return torch.sum(att_w.unsqueeze(2) * x, dim=0)
+
 
 class CoWordAttentionLayer(nn.Module):
     def __init__(self, ab_in_dim, sent_in_dim, att_dim):
@@ -40,13 +40,12 @@ class CoWordAttentionLayer(nn.Module):
 
         mu = mu.permute(1, 0, 2)
         mv = mv.permute(0, 2, 1)
-        att_w = mu.matmul(mv) # batch, seq_len, max_n_key
+        att_w = mu.matmul(mv)  # batch, seq_len, max_n_key
 
-        # att_w = torch.max(att_w, 2)[0]
-        att_w = torch.sum(att_w, dim=2)
+        att_w = torch.max(att_w, 2)[0]
 
         att_w = F.softmax(att_w, dim=1)
-        output = att_w.unsqueeze(1).matmul(x.permute(1,0,2))
+        output = att_w.unsqueeze(1).matmul(x.permute(1, 0, 2))
         return output.squeeze()
 
 
@@ -77,9 +76,9 @@ class SpoilerNet(nn.Module):
         self.emb_layer = nn.Embedding(vocab_size, emb_size, 0)
         # self.sentlv_word_emb_size = emb_size + 1 if use_idf else emb_size
         if use_idf and use_char:
-            self.sentlv_word_emb_size = emb_size + 2*char_cell_dim + 1
+            self.sentlv_word_emb_size = emb_size + 2 * char_cell_dim + 1
         elif use_char:
-            self.sentlv_word_emb_size = emb_size + 2*char_cell_dim
+            self.sentlv_word_emb_size = emb_size + 2 * char_cell_dim
         elif use_idf:
             self.sentlv_word_emb_size = emb_size + 1
         else:
@@ -113,7 +112,7 @@ class SpoilerNet(nn.Module):
         chars: (batch, sent_seq_len, word_seq_len, max_n_chars)
         doc_ab: (batch, max_n_key)
         '''
-        doc_ab = self.emb_layer(doc_ab) 
+        doc_ab = self.emb_layer(doc_ab)
 
         x = x.permute(1, 0, 2)
         # (sent_seq_len, batch, word_seq_len)
