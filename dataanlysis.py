@@ -7,15 +7,9 @@ import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 
-# from dataprepgr import generate_records
-
 # %%
 data_dir = 'data_/goodreads-reviews-spoiler'
 data_file = os.path.join(data_dir, 'mappings_10000_all_ge5.pkl')
-
-# %%
-# one_record = list(generate_records(1))
-# print(one_record[0].keys())
 
 # %%
 # Load
@@ -107,7 +101,7 @@ def word_of_idx(doc_label_sents, idx, itow):
     return itow[doc_label_sents[idx[0]][idx[1]][1][idx[2]]]
 
 
-top100w = set(
-    map(lambda i: word_of_idx(doc_label_sents, i, itow), map(lambda e: e[1], dfidftop100)))
+top100w = set(map(lambda i: word_of_idx(doc_label_sents, i, itow), map(lambda e: e[1],
+                                                                       dfidftop100)))
 
 # %%
