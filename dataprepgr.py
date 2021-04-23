@@ -3,7 +3,6 @@ Data credits: Mengting Wan, Rishabh Misra, Ndapa Nakashole, Julian McAuley, "Fin
 '''
 import collections
 import itertools
-import functools
 import os
 import gzip
 import json
@@ -11,9 +10,8 @@ import pickle
 import re
 import string
 import math
-from typing import Iterable
 
-import nltk
+# import nltk
 # nltk.download('stopwords')
 # nltk.download('punkt')
 
@@ -46,7 +44,6 @@ if not os.path.exists(file_dir):
 file_path = os.path.join(file_dir, filename)
 if not os.path.exists(file_path):
     gdown.download(URL, output=file_path)
-
 
 # keywords
 keyword_path = "data_/book_id_keywords.json"
@@ -237,51 +234,54 @@ def process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa, log_every=10
 
     return doc_df_idf
 
+
 # char-process
 def get_char_dict(wtoi):
     itoc = set()
     for word in wtoi:
         word = set(word)
-        itoc = itoc | word 
+        itoc = itoc | word
 
     itoc = list(itoc)
     ctoi = {c: i for i, c in enumerate(itoc)}
     logger.info("Char Vocabulary size = {}".format(len(ctoi)))
     return ctoi, itoc
 
+
 # %%
-limit = 100000
-n_most_common = None
-freq_ge = 5
+if __name__ == '__main__':
+    limit = 100000
+    n_most_common = None
+    freq_ge = 5
 
-logger.info('# of reviews: {}'.format(limit))
-logger.info('Getting word counts...')
-wc, wc_artwork, wc_doc = word_count(generate_records(limit))
-logger.info('Building dictionaries...')
-wtoi, itow = get_word_dict(wc, n_most_common, freq_ge)
-logger.info('Building char-level dictionaries...')
-ctoi, itoc = get_char_dict(wtoi)
+    logger.info('# of reviews: {}'.format(limit))
+    logger.info('Getting word counts...')
+    wc, wc_artwork, wc_doc = word_count(generate_records(limit))
+    logger.info('Building dictionaries...')
+    wtoi, itow = get_word_dict(wc, n_most_common, freq_ge)
+    logger.info('Building char-level dictionaries...')
+    ctoi, itoc = get_char_dict(wtoi)
 
-logger.info('Encoding reviews...')
-doc_encode, doc_artwork, doc_key_encode = process(generate_records(limit), wtoi)
-logger.info('Calculating DF-IDF...')
-atod, wtod, wtoa = prepare_invmap(doc_artwork, wc_doc, wc_artwork)
-doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa)
-logger.info('Saving...')
-obj = {
-    'doc_label_sents': doc_encode,
-    'itow': itow,
-    'wc': dict(wc),
-    'wc_artwork': dict(wc_artwork),
-    'doc_artwork': doc_artwork,
-    'doc_df_idf': doc_df_idf,
-    'ctoi': ctoi,
-    'doc_key_encode': doc_key_encode
-}
-filename = 'mappings_{}_{}_ge{}'.format('all' if limit is None else str(limit),
-                                        'all' if n_most_common is None else str(n_most_common),
-                                        str(freq_ge))
-with open(os.path.join(file_dir, filename + '.pkl'), 'wb') as f:
-    pickle.dump(obj, f)
+    logger.info('Encoding reviews...')
+    doc_encode, doc_artwork, doc_key_encode = process(generate_records(limit), wtoi)
+    logger.info('Calculating DF-IDF...')
+    atod, wtod, wtoa = prepare_invmap(doc_artwork, wc_doc, wc_artwork)
+    doc_df_idf = process_df_idf(doc_encode, doc_artwork, itow, atod, wtod, wtoa)
+    logger.info('Saving...')
+    obj = {
+        'doc_label_sents': doc_encode,
+        'itow': itow,
+        'wc': dict(wc),
+        'wc_artwork': dict(wc_artwork),
+        'doc_artwork': doc_artwork,
+        'doc_df_idf': doc_df_idf,
+        'ctoi': ctoi,
+        'doc_key_encode': doc_key_encode
+    }
+    filename = 'mappings_{}_{}_ge{}'.format('all' if limit is None else str(limit),
+                                            'all' if n_most_common is None else str(n_most_common),
+                                            str(freq_ge))
+    with open(os.path.join(file_dir, filename + '.pkl'), 'wb') as f:
+        pickle.dump(obj, f)
 
 # %%
