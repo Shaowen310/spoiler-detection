@@ -35,7 +35,7 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
     filename = 'goodreads_reviews_spoiler.json.gz'
     word_tokenizer = nltk.tokenize.TreebankWordTokenizer()
 
-    def __init__(self, doc_label_sents, doc_df_idf, doc_keys, itow, max_n_words, max_n_sents, ctoi):
+    def __init__(self, doc_label_sents, doc_df_idf, doc_keys, itow, max_n_words, max_n_sents, ctoi, doc_char_encode):
         super().__init__()
 
         self.max_n_words = max_n_words
@@ -43,6 +43,8 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
 
         self.itow = itow
         self.wtoi = {w: i for i, w in enumerate(self.itow)}
+
+        self.doc_char_encode = doc_char_encode
 
 
         char_length = [len(w) for w in self.wtoi]
@@ -54,7 +56,7 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
         self.max_n_keys = key_length[int(0.9*len(key_length))]
 
 
-        docs, labels, doc_len_masks, doc_sent_lens, doc_chars, doc_abs = self.pad(doc_label_sents, doc_keys, itow=itow, ctoi=ctoi)
+        docs, labels, doc_len_masks, doc_sent_lens, doc_chars, doc_abs = self.pad(doc_label_sents, doc_keys, doc_char_encode, itow=itow, ctoi=ctoi)
         self.docs = torch.from_numpy(docs)
         self.labels = torch.from_numpy(labels)
         self.doc_len_masks = torch.from_numpy(doc_len_masks)
@@ -65,7 +67,7 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
 
         self.doc_dfidf = self.paddfidf(doc_df_idf)
 
-    def pad(self, doc_label_sents, doc_keys, pad_idx=0, itow=None, ctoi=None):
+    def pad(self, doc_label_sents, doc_keys, doc_char_encode, pad_idx=0, itow=None, ctoi=None):
         docs, labels, doc_lens, doc_sent_lens, doc_chars, doc_abs = [], [], [], [], [], []
         for k, label_sent_encodes in enumerate(doc_label_sents):
 
@@ -90,10 +92,11 @@ class GoodreadsReviewsSpoilerDataset(torch.utils.data.Dataset):
                 sent_lens.append(sent_len)
 
                 for j, wid in enumerate(sent[:sent_len]):
-                    word = itow[wid]
-                    w_c_list = []
-                    for char in word:
-                        w_c_list.append(ctoi[char])
+                    w_c_list = self.doc_char_encode[k][i][j]
+                    # word = itow[wid]
+                    # w_c_list = []
+                    # for char in word:
+                    #     w_c_list.append(ctoi[char])
 
                     word_len = min((self.max_n_chars, len(w_c_list)))
                     doc_char[i, j, :word_len] = np.array(w_c_list)[:word_len]

@@ -39,6 +39,7 @@ doc_df_idf = data['doc_df_idf']
 itow = data['itow']
 ctoi = data["ctoi"]
 doc_key_encode = data['doc_key_encode']
+doc_char_encode = data['doc_char_encode']
 
 
 # %%
@@ -52,6 +53,8 @@ def train_dev_test_split_idx(rand_idx, d: Sequence, n_train: int, n_dev: int):
 
 np.random.seed(0)
 
+np.random.seed(0)
+
 n_d = len(doc_label_sents)
 n_train = math.floor(n_d * train_portion)
 n_dev = math.floor(n_d * dev_portion)
@@ -61,13 +64,15 @@ d_train, d_dev, d_test = train_dev_test_split_idx(rand_idx, doc_label_sents, n_t
 d_idf_train, d_idf_dev, d_idf_test = train_dev_test_split_idx(rand_idx, doc_df_idf, n_train, n_dev)
 d_key_train, d_key_dev, d_key_test = train_dev_test_split_idx(rand_idx, doc_key_encode, n_train,
                                                               n_dev)
+d_char_train, d_char_dev, d_char_test = train_dev_test_split_idx(rand_idx, doc_char_encode, n_train,
+                                                                 n_dev)
 
 ds_train = GoodreadsReviewsSpoilerDataset(d_train, d_idf_train, d_key_train, itow, max_sent_len,
-                                          max_doc_len, ctoi)
+                                          max_doc_len, ctoi, d_char_train)
 ds_dev = GoodreadsReviewsSpoilerDataset(d_dev, d_idf_dev, d_key_dev, itow, max_sent_len,
-                                        max_doc_len, ctoi)
+                                        max_doc_len, ctoi, d_char_dev)
 ds_test = GoodreadsReviewsSpoilerDataset(d_test, d_idf_test, d_key_test, itow, max_sent_len,
-                                         max_doc_len, ctoi)
+                                         max_doc_len, ctoi, d_char_test)
 dl_train = torch.utils.data.DataLoader(ds_train, batch_size=batch_size, shuffle=True)
 dl_dev = torch.utils.data.DataLoader(ds_dev, batch_size=batch_size)
 dl_test = torch.utils.data.DataLoader(ds_test, batch_size=batch_size)
